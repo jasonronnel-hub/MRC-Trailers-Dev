@@ -1,6 +1,6 @@
 import { DEDUCTION_LABELS, formatPrice } from '../lib/api'
 
-export default function PartyDrawer({ party: p, orders, close }) {
+export default function PartyDrawer({ party: p, orders, close, onEdit }) {
   const isBuyer = p.group?.name === 'Trailer Buyer'
   const partyOrders = orders.filter((o) => o.buyer?.id === p.id)
   const contacts = (p.contacts || []).filter((c) => c.active !== false)
@@ -13,7 +13,8 @@ export default function PartyDrawer({ party: p, orders, close }) {
             <h3>{p.name}</h3>
             <div className="kind">{p.group?.name || 'Party'}</div>
           </div>
-          <button className="x" onClick={close} aria-label="Close">×</button>
+          {onEdit && <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={onEdit}>Edit</button>}
+          <button className="x" onClick={close} aria-label="Close" style={onEdit ? { marginLeft: 0 } : undefined}>×</button>
         </div>
         <div className="dbody">
           {/* Pop-up warnings surface first — ROM's PopUpNote equivalent. */}

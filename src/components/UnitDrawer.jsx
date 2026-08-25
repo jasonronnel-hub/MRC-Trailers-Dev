@@ -2,7 +2,7 @@ import Pill from './Pill'
 
 const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString())
 
-export default function UnitDrawer({ unit, close }) {
+export default function UnitDrawer({ unit, close, onEdit }) {
   if (!unit) return null
   return (
     <div className="drawer-wrap" onClick={close}>
@@ -12,7 +12,8 @@ export default function UnitDrawer({ unit, close }) {
             <h3>{unit.unit_number || `W${unit.legacy_bwt_id ?? unit.id}`}</h3>
             <div className="kind">Unit · broker weight ticket</div>
           </div>
-          <button className="x" onClick={close} aria-label="Close">×</button>
+          {onEdit && <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={onEdit}>Edit</button>}
+          <button className="x" onClick={close} aria-label="Close" style={onEdit ? { marginLeft: 0 } : undefined}>×</button>
         </div>
         <div className="dbody">
           <div style={{ marginBottom: 14 }}><Pill status={unit.status?.name} /></div>

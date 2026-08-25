@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { supabase } from './lib/supabase'
+import { supabase, signOut } from './lib/supabase'
 import { fetchAll, fetchMyRole } from './lib/api'
 import { SignIn, MfaVerify, MfaEnroll, NoRole } from './components/Login'
 import Logo from './components/Logo'
 import PipelineRail from './components/PipelineRail'
 import Inventory from './components/Inventory'
-import UnitDrawer from './components/UnitDrawer'
 import Buyers from './components/Buyers'
 import Orders from './components/Orders'
 
@@ -62,17 +61,19 @@ function Shell({ role, email }) {
   const [err, setErr] = useState('')
   const [tab, setTab] = useState('inventory')
   const [statusFilter, setStatusFilter] = useState(null)
-  const [drawerUnit, setDrawerUnit] = useState(null)
 
-  useEffect(() => {
-    fetchAll().then(setData).catch((e) => setErr(e.message))
-  }, [])
+  const refresh = useCallback(
+    () => fetchAll().then(setData).catch((e) => setErr(e.message)),
+    [],
+  )
+  useEffect(() => { refresh() }, [refresh])
 
   if (err) return <div className="auth-wrap"><div className="auth-err">Couldn’t load data: {err}</div></div>
   if (!data) return <div className="auth-wrap"><span className="muted">Loading…</span></div>
 
   const { statuses, units, parties, orders } = data
   const buyerCount = parties.filter((p) => p.group?.name === 'Trailer Buyer').length
+  const screenProps = { data, role, refresh }
 
   return (
     <>
@@ -84,7 +85,7 @@ function Shell({ role, email }) {
         <div className="userchip">
           <span className="email">{email}</span>
           <span className="role">{role}</span>
-          <button onClick={() => supabase.auth.signOut()}>Sign out</button>
+          <button onClick={() => signOut()}>Sign out</button>
         </div>
       </div>
 
@@ -104,16 +105,12 @@ function Shell({ role, email }) {
 
         <div className="main">
           {tab === 'inventory' && (
-            <Inventory statuses={statuses} units={units}
-              statusFilter={statusFilter} setStatusFilter={setStatusFilter}
-              onOpen={setDrawerUnit} />
+            <Inventory {...screenProps} statusFilter={statusFilter} setStatusFilter={setStatusFilter} />
           )}
-          {tab === 'buyers' && <Buyers parties={parties} orders={orders} />}
-          {tab === 'orders' && <Orders orders={orders} />}
+          {tab === 'buyers' && <Buyers {...screenProps} />}
+          {tab === 'orders' && <Orders {...screenProps} />}
         </div>
       </div>
-
-      {drawerUnit && <UnitDrawer unit={drawerUnit} close={() => setDrawerUnit(null)} />}
     </>
   )
 }

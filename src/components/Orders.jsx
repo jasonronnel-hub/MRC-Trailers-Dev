@@ -1,15 +1,25 @@
 import { useState } from 'react'
-import { formatPrice } from '../lib/api'
+import { formatPrice, can } from '../lib/api'
 import OrderDrawer from './OrderDrawer'
+import OrderForm from './OrderForm'
+import AttachUnitsModal from './AttachUnitsModal'
 
-export default function Orders({ orders }) {
+export default function Orders({ data, role, refresh }) {
+  const { orders, parties, units, equipTypes } = data
   const [drawerOrder, setDrawerOrder] = useState(null)
+  const [formOrder, setFormOrder] = useState(null)    // null = closed, 'new' = create, object = edit
+  const [attachOrder, setAttachOrder] = useState(null)
+
+  const saved = () => { setFormOrder(null); setAttachOrder(null); setDrawerOrder(null); refresh() }
 
   return (
     <div>
       <div className="pagehead">
         <h2>Sales Orders</h2>
         <span className="sub">internal only — buyers issue their own PO</span>
+        {can(role, 'createOrder') && (
+          <button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => setFormOrder('new')}>+ New sales order</button>
+        )}
       </div>
 
       {orders.length ? (
@@ -44,7 +54,20 @@ export default function Orders({ orders }) {
         <div className="empty">No sales orders yet.</div>
       )}
 
-      {drawerOrder && <OrderDrawer order={drawerOrder} close={() => setDrawerOrder(null)} />}
+      {drawerOrder && (
+        <OrderDrawer order={drawerOrder} close={() => setDrawerOrder(null)}
+          onEdit={can(role, 'editOrder') ? () => setFormOrder(drawerOrder) : null}
+          onAttach={can(role, 'attachUnits') && drawerOrder.open ? () => setAttachOrder(drawerOrder) : null} />
+      )}
+      {formOrder && (
+        <OrderForm order={formOrder === 'new' ? null : formOrder} orders={orders}
+          parties={parties} equipTypes={equipTypes}
+          close={() => setFormOrder(null)} onSaved={saved} />
+      )}
+      {attachOrder && (
+        <AttachUnitsModal order={attachOrder} units={units}
+          close={() => setAttachOrder(null)} onSaved={saved} />
+      )}
     </div>
   )
 }

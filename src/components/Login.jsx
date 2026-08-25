@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, signOut } from '../lib/supabase'
 import Logo from './Logo'
 
 function Card({ children }) {
@@ -84,7 +84,7 @@ export function MfaVerify({ onDone }) {
       </form>
       <div className="auth-note">
         <button className="linklike" style={{ background: 'none', border: 0, textDecoration: 'underline', color: 'inherit' }}
-          onClick={() => supabase.auth.signOut()}>Sign out</button>
+          onClick={() => signOut()}>Sign out</button>
       </div>
     </Card>
   )
@@ -148,7 +148,7 @@ export function MfaEnroll({ role, onDone }) {
       )}
       <div className="auth-note">
         <button style={{ background: 'none', border: 0, textDecoration: 'underline', color: 'inherit' }}
-          onClick={() => supabase.auth.signOut()}>Sign out</button>
+          onClick={() => signOut()}>Sign out</button>
       </div>
     </Card>
   )
@@ -163,7 +163,7 @@ export function NoRole({ email }) {
         <span className="mono">{email}</span> is signed in but has no role assigned yet.
         Ask Jason or Steve to add you, then sign in again.
       </p>
-      <button className="btn ghost" onClick={() => supabase.auth.signOut()}>Sign out</button>
+      <button className="btn ghost" onClick={() => signOut()}>Sign out</button>
     </Card>
   )
 }

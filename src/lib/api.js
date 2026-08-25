@@ -3,7 +3,7 @@ import { supabase } from './supabase'
 // Fetch-everything is fine at seed scale; once ROM's 23k units migrate in,
 // switch the rail counts to a grouped RPC and paginate the tables.
 export async function fetchAll() {
-  const [statuses, units, parties, orders] = await Promise.all([
+  const [statuses, units, parties, orders, groups, equipTypes, titleTypes] = await Promise.all([
     supabase.from('unit_statuses').select('id, name, sort_order').order('sort_order'),
     supabase.from('units').select(`
       id, legacy_bwt_id, unit_number, alt_unit_number, vin, model_year,
@@ -31,10 +31,66 @@ export async function fetchAll() {
       buyer:parties ( id, name ),
       units ( id, legacy_bwt_id, unit_number, status:unit_statuses ( name ) )
     `).order('id'),
+    supabase.from('party_groups').select('id, name').order('name'),
+    supabase.from('equipment_types').select('id, name, item_code, default_ref_weight_lbs').eq('active', true).order('name'),
+    supabase.from('title_types').select('id, name'),
   ])
-  for (const r of [statuses, units, parties, orders]) if (r.error) throw r.error
-  return { statuses: statuses.data, units: units.data, parties: parties.data, orders: orders.data }
+  for (const r of [statuses, units, parties, orders, groups, equipTypes, titleTypes]) if (r.error) throw r.error
+  return {
+    statuses: statuses.data, units: units.data, parties: parties.data, orders: orders.data,
+    groups: groups.data, equipTypes: equipTypes.data, titleTypes: titleTypes.data,
+  }
 }
+
+// ---- mutations --------------------------------------------------------------
+
+export async function saveParty(fields, id) {
+  const q = id
+    ? supabase.from('parties').update(fields).eq('id', id)
+    : supabase.from('parties').insert(fields)
+  const { error } = await q
+  if (error) throw error
+}
+
+export async function saveOrder(fields, id) {
+  const q = id
+    ? supabase.from('sales_orders').update(fields).eq('id', id)
+    : supabase.from('sales_orders').insert(fields)
+  const { error } = await q
+  if (error) throw error
+}
+
+export async function saveUnit(fields, id) {
+  const q = id
+    ? supabase.from('units').update(fields).eq('id', id)
+    : supabase.from('units').insert(fields)
+  const { error } = await q
+  if (error) throw error
+}
+
+// Attach an EXPLICIT list of unit ids to a sales order. The database trigger
+// fills sold_to_party_id, flips status to Sold — Dispatch Required, and writes
+// status_log. Never call this with "whatever the current view shows".
+export async function attachUnits(orderId, unitIds) {
+  if (!unitIds.length) return
+  const { error } = await supabase.from('units')
+    .update({ sales_order_id: orderId })
+    .in('id', unitIds)
+  if (error) throw error
+}
+
+// Role → capability map, mirroring the Section 3 RLS policies. The database
+// enforces this regardless; the UI just avoids offering doomed actions.
+const CAN = {
+  createParty: ['office', 'admin'],
+  editParty: ['office', 'admin', 'sales'],
+  createOrder: ['sales', 'admin'],
+  editOrder: ['sales', 'admin', 'accounting'],
+  attachUnits: ['sales', 'admin'],
+  createUnit: ['office', 'sales', 'logistics', 'admin'],
+  editUnit: ['sales', 'logistics', 'accounting', 'admin'],
+}
+export const can = (role, action) => (CAN[action] || []).includes(role)
 
 export async function fetchMyRole() {
   const { data, error } = await supabase.from('user_roles').select('role').maybeSingle()

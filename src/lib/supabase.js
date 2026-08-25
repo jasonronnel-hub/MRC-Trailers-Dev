@@ -8,3 +8,9 @@ if (!url || !anonKey) {
 }
 
 export const supabase = createClient(url, anonKey)
+
+// Always clears the local session, even if the server-side revocation fails
+// (e.g. the auth user was deleted while a session was still stored).
+export async function signOut() {
+  try { await supabase.auth.signOut({ scope: 'local' }) } catch { /* session already gone */ }
+}

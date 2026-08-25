@@ -1,10 +1,16 @@
 import { useMemo, useState } from 'react'
 import Pill from './Pill'
+import UnitDrawer from './UnitDrawer'
+import UnitForm from './UnitForm'
 import { statusMeta } from '../lib/statuses'
+import { can } from '../lib/api'
 
-export default function Inventory({ statuses, units, statusFilter, setStatusFilter, onOpen }) {
+export default function Inventory({ data, role, refresh, statusFilter, setStatusFilter }) {
+  const { statuses, units, parties, equipTypes, titleTypes } = data
   const [sourceFilter, setSourceFilter] = useState(null)
   const [q, setQ] = useState('')
+  const [drawerUnit, setDrawerUnit] = useState(null)
+  const [formUnit, setFormUnit] = useState(null)      // null = closed, 'new' = create, object = edit
 
   const sources = useMemo(
     () => [...new Set(units.map((u) => u.source?.name).filter(Boolean))].sort(),
@@ -25,11 +31,16 @@ export default function Inventory({ statuses, units, statusFilter, setStatusFilt
       (a.status?.sort_order ?? 99) - (b.status?.sort_order ?? 99) || a.id - b.id)
   }, [units, statusFilter, sourceFilter, q])
 
+  const saved = () => { setFormUnit(null); setDrawerUnit(null); refresh() }
+
   return (
     <div>
       <div className="pagehead">
         <h2>Inventory</h2>
         <span className="sub">{rows.length} of {units.length} broker weight tickets</span>
+        {can(role, 'createUnit') && (
+          <button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => setFormUnit('new')}>+ New unit</button>
+        )}
       </div>
 
       <div className="filters">
@@ -63,7 +74,7 @@ export default function Inventory({ statuses, units, statusFilter, setStatusFilt
             </thead>
             <tbody>
               {rows.map((u) => (
-                <tr key={u.id} onClick={() => onOpen(u)}>
+                <tr key={u.id} onClick={() => setDrawerUnit(u)}>
                   <td><span className="ticket">W{u.legacy_bwt_id ?? u.id}</span></td>
                   <td>{u.unit_number || <span className="muted">—</span>}</td>
                   <td>{u.equipment_type?.name || <span className="muted">—</span>}</td>
@@ -79,6 +90,16 @@ export default function Inventory({ statuses, units, statusFilter, setStatusFilt
         </div>
       ) : (
         <div className="empty">No units match this filter. <b>Clear the filters</b> to see everything.</div>
+      )}
+
+      {drawerUnit && (
+        <UnitDrawer unit={drawerUnit} close={() => setDrawerUnit(null)}
+          onEdit={can(role, 'editUnit') ? () => setFormUnit(drawerUnit) : null} />
+      )}
+      {formUnit && (
+        <UnitForm unit={formUnit === 'new' ? null : formUnit}
+          statuses={statuses} equipTypes={equipTypes} titleTypes={titleTypes} parties={parties}
+          close={() => setFormUnit(null)} onSaved={saved} />
       )}
     </div>
   )

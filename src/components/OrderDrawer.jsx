@@ -1,7 +1,7 @@
 import Pill from './Pill'
 import { formatPrice } from '../lib/api'
 
-export default function OrderDrawer({ order: o, close }) {
+export default function OrderDrawer({ order: o, close, onEdit, onAttach }) {
   const units = o.units || []
   return (
     <div className="drawer-wrap" onClick={close}>
@@ -11,7 +11,11 @@ export default function OrderDrawer({ order: o, close }) {
             <h3 className="mono">{o.order_number}</h3>
             <div className="kind">Sales order{o.open ? '' : ' · closed'}</div>
           </div>
-          <button className="x" onClick={close} aria-label="Close">×</button>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            {onAttach && <button className="btn sm" onClick={onAttach}>Attach units</button>}
+            {onEdit && <button className="btn ghost sm" onClick={onEdit}>Edit</button>}
+            <button className="x" onClick={close} aria-label="Close" style={{ marginLeft: 0 }}>×</button>
+          </div>
         </div>
         <div className="dbody">
           <dl className="kv">

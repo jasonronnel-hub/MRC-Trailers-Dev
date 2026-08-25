@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react'
-import { DEDUCTION_LABELS } from '../lib/api'
+import { DEDUCTION_LABELS, can } from '../lib/api'
 import PartyDrawer from './PartyDrawer'
+import PartyForm from './PartyForm'
 
-export default function Buyers({ parties, orders }) {
+export default function Buyers({ data, role, refresh }) {
+  const { parties, orders, groups } = data
   const [groupFilter, setGroupFilter] = useState('Trailer Buyer')
   const [drawerParty, setDrawerParty] = useState(null)
+  const [formParty, setFormParty] = useState(null)    // null = closed, 'new' = create, object = edit
 
-  const groups = useMemo(
+  const groupNames = useMemo(
     () => [...new Set(parties.map((p) => p.group?.name).filter(Boolean))].sort(),
     [parties],
   )
@@ -15,16 +18,21 @@ export default function Buyers({ parties, orders }) {
     [parties, groupFilter],
   )
 
+  const saved = () => { setFormParty(null); setDrawerParty(null); refresh() }
+
   return (
     <div>
       <div className="pagehead">
         <h2>Buyers</h2>
         <span className="sub">{rows.length} accounts</span>
+        {can(role, 'createParty') && (
+          <button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => setFormParty('new')}>+ New account</button>
+        )}
       </div>
 
       <div className="filters">
         <span className={'chip' + (!groupFilter ? ' on' : '')} onClick={() => setGroupFilter(null)}>All groups</span>
-        {groups.map((g) => (
+        {groupNames.map((g) => (
           <span key={g} className={'chip' + (groupFilter === g ? ' on' : '')}
             onClick={() => setGroupFilter(groupFilter === g ? null : g)}>{g}</span>
         ))}
@@ -68,7 +76,12 @@ export default function Buyers({ parties, orders }) {
       )}
 
       {drawerParty && (
-        <PartyDrawer party={drawerParty} orders={orders} close={() => setDrawerParty(null)} />
+        <PartyDrawer party={drawerParty} orders={orders} close={() => setDrawerParty(null)}
+          onEdit={can(role, 'editParty') ? () => setFormParty(drawerParty) : null} />
+      )}
+      {formParty && (
+        <PartyForm party={formParty === 'new' ? null : formParty} groups={groups}
+          close={() => setFormParty(null)} onSaved={saved} />
       )}
     </div>
   )
