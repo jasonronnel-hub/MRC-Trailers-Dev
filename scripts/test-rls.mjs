@@ -131,22 +131,35 @@ async function testStatusAutomation() {
 }
 
 async function testDispatchPolicies() {
-  console.log('\nDispatch (Spec §3: logistics/admin write; sales cannot):')
+  console.log('\nDispatch (business-continuity coverage: office/sales/logistics/admin write; accounting/readonly cannot):')
   const logistics = await signedInClient('rls-test-logistics@mrc-test.invalid')
   const { data: d, error } = await logistics.from('dispatches')
     .insert({ dispatch_number: 'D-RLS-TEST', hauler_party_id: partyId }).select().single()
   check(!error, `logistics can create a dispatch${error ? ' (err: ' + error.message + ')' : ''}`)
   await logistics.auth.signOut()
 
+  // Kim being out sick shouldn't stop dispatch — sales and office cover.
   const sales = await signedInClient('rls-test-sales@mrc-test.invalid')
-  const { error: se } = await sales.from('dispatches')
-    .insert({ dispatch_number: 'D-RLS-NOPE', hauler_party_id: partyId })
-  check(!!se, 'sales CANNOT create a dispatch')
+  const { data: d2, error: se } = await sales.from('dispatches')
+    .insert({ dispatch_number: 'D-RLS-SALES', hauler_party_id: partyId }).select().single()
+  check(!se, `sales CAN create a dispatch (backup coverage)${se ? ' (err: ' + se.message + ')' : ''}`)
   const { data: read } = await sales.from('dispatches').select('id').eq('dispatch_number', 'D-RLS-TEST')
   check((read?.length ?? 0) === 1, 'sales can read dispatches (division read)')
   await sales.auth.signOut()
 
-  if (d?.id) await admin.from('dispatches').delete().eq('id', d.id)
+  const office = await signedInClient('rls-test-office@mrc-test.invalid')
+  const { data: d3, error: oe } = await office.from('dispatches')
+    .insert({ dispatch_number: 'D-RLS-OFFICE', hauler_party_id: partyId }).select().single()
+  check(!oe, `office CAN create a dispatch (backup coverage)${oe ? ' (err: ' + oe.message + ')' : ''}`)
+  await office.auth.signOut()
+
+  const acct = await signedInClient('rls-test-accounting@mrc-test.invalid')
+  const { error: ae } = await acct.from('dispatches')
+    .insert({ dispatch_number: 'D-RLS-ACCT-NOPE', hauler_party_id: partyId })
+  check(!!ae, 'accounting still CANNOT create a dispatch')
+  await acct.auth.signOut()
+
+  for (const row of [d, d2, d3]) if (row?.id) await admin.from('dispatches').delete().eq('id', row.id)
 }
 
 async function testInvoicePolicies() {
@@ -214,7 +227,7 @@ async function cleanup() {
   console.log('\nCleaning up…')
   if (unitId) await admin.from('status_log').delete().eq('unit_id', unitId)
   if (unitId) await admin.from('units').delete().eq('id', unitId)
-  await admin.from('dispatches').delete().in('dispatch_number', ['D-RLS-TEST', 'D-RLS-NOPE'])
+  await admin.from('dispatches').delete().in('dispatch_number', ['D-RLS-TEST', 'D-RLS-SALES', 'D-RLS-OFFICE', 'D-RLS-ACCT-NOPE'])
   await admin.from('invoices').delete().in('invoice_number', ['INV-RLS-TEST', 'INV-RLS-NOPE'])
   if (soId) await admin.from('sales_orders').delete().eq('id', soId)
   if (partyId) {

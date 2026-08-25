@@ -392,10 +392,12 @@ const CAN = {
   editOrder: ['sales', 'admin', 'accounting'],
   attachUnits: ['sales', 'admin'],
   createUnit: ['office', 'sales', 'logistics', 'admin'],
-  editUnit: ['sales', 'logistics', 'accounting', 'admin'],
+  editUnit: ['office', 'sales', 'logistics', 'accounting', 'admin'],
   addNote: ['office', 'sales', 'logistics', 'accounting', 'admin'],
-  createDispatch: ['logistics', 'admin'],
-  editDispatch: ['logistics', 'admin'],
+  // Not gatekept to logistics: if Kim's out, TJ or Janet need to keep
+  // dispatches moving — same backup-coverage rule as unit intake.
+  createDispatch: ['office', 'sales', 'logistics', 'admin'],
+  editDispatch: ['office', 'sales', 'logistics', 'admin'],
   createInvoice: ['accounting', 'admin'],
   editInvoice: ['accounting', 'admin'],
   importSnapshot: ['office', 'sales', 'admin'],
