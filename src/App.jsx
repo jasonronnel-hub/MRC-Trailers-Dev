@@ -10,7 +10,7 @@ import Orders from './components/Orders'
 import Dispatch from './components/Dispatch'
 import Invoices from './components/Invoices'
 import Fleet from './components/Fleet'
-import TuesdayReport from './components/TuesdayReport'
+import Reports from './components/Reports'
 import Assistant from './components/Assistant'
 
 const MFA_REQUIRED_ROLES = ['admin', 'accounting'] // Spec §5.1
@@ -108,7 +108,7 @@ function Shell({ role, email }) {
             ['dispatch', 'Dispatch', data.dispatches.length || null],
             ['invoices', 'Invoices', data.invoices.filter((i) => i.open).length || null],
             ['fleet', 'Fleet Reports', null],
-            ['tuesday', 'Tuesday Report', null],
+            ['reports', 'Reports', null],
             ['assistant', 'Assistant', null],
           ].map(([k, label, n]) => (
             <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>
@@ -127,7 +127,7 @@ function Shell({ role, email }) {
           {tab === 'dispatch' && <Dispatch {...screenProps} />}
           {tab === 'invoices' && <Invoices {...screenProps} />}
           {tab === 'fleet' && <Fleet {...screenProps} />}
-          {tab === 'tuesday' && <TuesdayReport {...screenProps} />}
+          {tab === 'reports' && <Reports {...screenProps} />}
           {tab === 'assistant' && <Assistant {...screenProps} />}
         </div>
       </div>

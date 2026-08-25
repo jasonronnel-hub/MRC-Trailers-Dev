@@ -34,7 +34,7 @@ export async function fetchAll() {
       payment_terms, payment_method, credit_limit,
       deduction_model, standard_deductions, destruction_agreement_signed,
       rema_member, merged_parent, general_notes, trucking_notes,
-      purchase_hot_notes, active,
+      purchase_hot_notes, report_recipients, active,
       group:party_groups ( id, name ),
       contacts:party_contacts ( id, name, email, phone, is_default, active )
     `).eq('active', true).order('name').limit(10000),
@@ -101,6 +101,7 @@ export async function fetchUnitsPage({ filters = {}, sort = {}, page = 0, pageSi
   if (filters.unattachedSO) q = q.is('sales_order_id', null)
   if (filters.unattachedDispatch) q = q.is('dispatch_id', null)
   if (filters.unattachedInvoice) q = q.is('invoice_id', null)
+  if (filters.pickedUpSince) q = q.gte('pickup_date', filters.pickedUpSince)
   if (filters.q?.trim()) {
     const needle = filters.q.trim().replaceAll(',', ' ').replaceAll('%', '')
     q = q.or(['unit_number', 'alt_unit_number', 'vin', 'physical_location']

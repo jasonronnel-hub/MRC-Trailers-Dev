@@ -121,7 +121,7 @@ export default function Dispatch({ data, role, refresh }) {
                 <button className="btn ghost sm" disabled={!drawerUnits} onClick={() => setPrintDoc({ kind: 'release', dispatch: drawerD })}>Release (print)</button>
                 <button className="btn ghost sm" disabled={!drawerUnits} onClick={() => openEmail('notice', drawerD)}>Email buyer (Kim’s format)</button>
                 <button className="btn ghost sm" disabled={!drawerUnits} onClick={() => openEmail('order', drawerD)}>Email hauler (draft — confirm w/ Kim)</button>
-                <button className="btn ghost sm" disabled={!drawerUnits} onClick={() => openEmail('release', drawerD)}>Email release (draft — confirm w/ Kim)</button>
+                <button className="btn ghost sm" disabled={!drawerUnits} onClick={() => openEmail('release', drawerD)}>Email release (real per Kim — wording TBD)</button>
               </div>
 
               <b>Units{drawerUnits ? ` (${drawerUnits.length})` : ''}</b>

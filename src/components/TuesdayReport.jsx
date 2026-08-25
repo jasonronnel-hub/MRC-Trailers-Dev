@@ -6,7 +6,7 @@ import { fetchActiveUnits } from '../lib/api'
 // "what the division needs to see weekly" — Kim decides the real content.
 // Fetches only the ACTIVE pipeline (closed history excluded), so it stays
 // fast even with 23k+ migrated units. Renders, prints, copies as text.
-export default function TuesdayReport({ data, counts }) {
+export default function TuesdayReport({ data, counts, embedded = true }) {
   const { dispatches, statuses } = data
   const [units, setUnits] = useState(null)
   const [copied, setCopied] = useState(false)
@@ -50,12 +50,7 @@ export default function TuesdayReport({ data, counts }) {
   }, [units, dispatches])
 
   if (units === null) {
-    return (
-      <div>
-        <div className="pagehead"><h2>Tuesday Report</h2><span className="sub">building the snapshot…</span></div>
-        <div className="empty">Loading active pipeline…</div>
-      </div>
-    )
+    return <div className="empty">Loading active pipeline…</div>
   }
 
   const unitLabel = (u) => u.unit_number || `W${u.legacy_bwt_id ?? u.id}`
@@ -100,9 +95,7 @@ export default function TuesdayReport({ data, counts }) {
 
   return (
     <div>
-      <div className="pagehead no-print">
-        <h2>Tuesday Report</h2>
-        <span className="sub">weekly snapshot — sections are a strawman for Kim</span>
+      <div className="filters no-print">
         <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <button className="btn ghost sm" onClick={copy}>{copied ? 'Copied ✓' : 'Copy as text'}</button>
           <button className="btn sm" onClick={() => window.print()}>Print</button>

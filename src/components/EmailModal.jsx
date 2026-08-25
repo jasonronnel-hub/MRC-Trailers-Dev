@@ -14,13 +14,15 @@ export default function EmailModal({ draft, title, close }) {
   }
 
   const downloadEml = () => {
+    // When the draft carries an HTML version (e.g. Kim's formatted covering
+    // letter), the .eml is HTML so red/bold survive; mailto stays plain.
     const eml = [
       `To: ${to}`,
       `Subject: ${subject}`,
       'X-Unsent: 1',
-      'Content-Type: text/plain; charset=utf-8',
+      draft.html ? 'Content-Type: text/html; charset=utf-8' : 'Content-Type: text/plain; charset=utf-8',
       '',
-      body,
+      draft.html || body,
     ].join('\r\n')
     const url = URL.createObjectURL(new Blob([eml], { type: 'message/rfc822' }))
     const a = document.createElement('a')
@@ -34,6 +36,7 @@ export default function EmailModal({ draft, title, close }) {
     <Modal title={title} close={close}>
       <p className="muted" style={{ fontSize: 12.5, marginTop: 0 }}>
         Draft only — review and edit, then open it in your mail app to send.
+        {draft.html && <> The <b>.eml download</b> carries the formatted version (red/bold + tables); the text below is the plain fallback.</>}
       </p>
       <div className="field">
         <label>To</label>

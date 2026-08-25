@@ -29,6 +29,7 @@ export default function PartyForm({ party, groups, close, onSaved }) {
     general_notes: F(party?.general_notes),
     trucking_notes: F(party?.trucking_notes),
     purchase_hot_notes: F(party?.purchase_hot_notes),
+    report_recipients: F(party?.report_recipients),
   })
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -117,6 +118,11 @@ export default function PartyForm({ party, groups, close, onSaved }) {
           <div className="field">
             <label>Pop-up warning (hot note)</label>
             <textarea value={f.purchase_hot_notes} onChange={set('purchase_hot_notes')} placeholder="Shown as a must-see warning on the account" />
+          </div>
+          <div className="field full">
+            <label>Report recipients (inventory-report email list)</label>
+            <textarea value={f.report_recipients} onChange={set('report_recipients')}
+              placeholder="one email per line or comma-separated — e.g. the FedEx managers list" />
           </div>
 
           {editing && (
