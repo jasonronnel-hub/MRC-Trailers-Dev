@@ -43,9 +43,15 @@ left column, stop and think; the right column is expected to churn.
   **Invoiced ≠ paid** (Jason, Aug 2026): ROM tracks payment on the Invoice
   table (`isOpen`, `PaymentRecDate`, `CashPaid/CheckPaid/WirePaid`, `DueDate`)
   plus a full AR ledger with partial application (`ARAppliedByInvoice`,
-  `ARUnapplied`). Phase 3b must model invoices as their own entities with
-  open/paid state — NOT as another unit status, because one invoice covers
-  many units and payments apply partially.
+  `ARUnapplied`). Built as a WORKING STRAWMAN (Aug 2026): `invoices` table
+  with open/paid state — deliberately NOT a unit status — Invoices screen,
+  mark-paid flow, invoice-ready CSV, and ROM invoice-header migration
+  (linkage: `InvoiceDetail.OurWeightTicket → BrokerWTID` + buyer match;
+  `isOpen` is NOT the AR flag — `PaymentRecDate`/paid amounts are; confirm
+  with Katherine). Detail-level settlement (Our/Their/Settle weights,
+  deductions, partial application) stays Phase 3b with Katherine.
+  Known scale wart: the Invoices tab reads fetchAll's newest-10k window —
+  server-page it like units before cutover.
 - **`notes` order/dispatch mapping** — legacy notes migrate to units and
   parties today; order-attached notes stay in staging until entity mapping is
   confirmed against real data.
