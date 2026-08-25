@@ -15,7 +15,7 @@ export const UNIT_SELECT = `
   condition_comments, ref_weight_lbs, title_received, title_sent_date, title_tracking_num, voided, missing,
   purchase_location, purchase_location_address, sale_location, sale_cust_ref,
   deliver_wt_ref, purch_ticket_ref, sales_ticket_ref, wt_um, material_type,
-  gross_wt, tare_wt, net_wt, confirmed_net,
+  gross_wt, tare_wt, net_wt, confirmed_net, tire_count,
   status:unit_statuses ( id, name, sort_order ),
   equipment_type:equipment_types ( name, item_code ),
   title_type:title_types ( name ),
@@ -36,7 +36,8 @@ export async function fetchAll() {
       rema_member, merged_parent, general_notes, trucking_notes,
       purchase_hot_notes, report_recipients, active,
       group:party_groups ( id, name ),
-      contacts:party_contacts ( id, name, email, phone, is_default, active )
+      contacts:party_contacts ( id, name, email, phone, is_default, active ),
+      deductions:party_deductions ( id, description, kind, basis, rate )
     `).eq('active', true).order('name').limit(10000),
     supabase.from('sales_orders').select(`
       id, order_number, customer_reference, item_code, price, price_unit,
@@ -157,6 +158,19 @@ export async function saveParty(fields, id) {
     ? supabase.from('parties').update(fields).eq('id', id)
     : supabase.from('parties').insert(fields)
   const { error } = await q
+  if (error) throw error
+}
+
+export async function saveDeduction(fields, id) {
+  const q = id
+    ? supabase.from('party_deductions').update(fields).eq('id', id)
+    : supabase.from('party_deductions').insert(fields)
+  const { error } = await q
+  if (error) throw error
+}
+
+export async function deleteDeduction(id) {
+  const { error } = await supabase.from('party_deductions').delete().eq('id', id)
   if (error) throw error
 }
 
@@ -371,15 +385,36 @@ export const LB_PER = {
 
 // Suggested invoice amount from a unit's SO pricing — a HELPER for Katherine,
 // never authoritative (settlement weights/deductions are her Phase 3b domain).
-export function suggestedUnitAmount(u) {
+//
+// Deduction math (Jason, Aug 2026): weight deductions (lbs, per tire or per
+// unit) reduce billable pounds BEFORE pricing; dollar deductions (per tire
+// or per unit) subtract AFTER. Per-tire rules need the unit's tire_count —
+// if it's missing, per-tire rules are skipped (never guessed).
+export function suggestedUnitAmount(u, deductions = []) {
   const price = u.sales_order?.price
   const unit = u.sales_order?.price_unit
   if (price == null) return null
-  if (unit === 'flat') return Number(price)
-  const wt = u.confirmed_net ?? u.net_wt
+  if (unit === 'flat') return applyDollarDeductions(Number(price), u, deductions)
+  let wt = u.confirmed_net ?? u.net_wt
   if (wt == null) return null
+  for (const d of deductions) {
+    if (d.kind !== 'weight') continue
+    if (d.basis === 'per_unit') wt -= Number(d.rate)
+    else if (u.tire_count != null) wt -= Number(d.rate) * u.tire_count
+  }
+  wt = Math.max(0, wt)
   const perLb = LB_PER[unit]
-  return perLb ? (Number(price) * wt) / perLb : Number(price) * wt
+  const gross = perLb ? (Number(price) * wt) / perLb : Number(price) * wt
+  return applyDollarDeductions(gross, u, deductions)
+}
+
+function applyDollarDeductions(amount, u, deductions) {
+  for (const d of deductions) {
+    if (d.kind !== 'dollars') continue
+    if (d.basis === 'per_unit') amount -= Number(d.rate)
+    else if (u.tire_count != null) amount -= Number(d.rate) * u.tire_count
+  }
+  return Math.max(0, amount)
 }
 
 // ---- dispatch (Phase 3 strawman — workflow provisional until Kim's pass) ----

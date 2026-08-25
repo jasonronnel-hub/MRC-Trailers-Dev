@@ -16,6 +16,7 @@ export default function WeightsModal({ unit, close, onSaved }) {
     confirmed_gross: F(unit.confirmed_gross), confirmed_tare: F(unit.confirmed_tare),
     confirmed_net: F(unit.confirmed_net),
     wt_um: unit.wt_um || 'LB',
+    tire_count: F(unit.tire_count),
   })
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -48,6 +49,7 @@ export default function WeightsModal({ unit, close, onSaved }) {
         confirmed_gross: num(f.confirmed_gross), confirmed_tare: num(f.confirmed_tare),
         confirmed_net: num(f.confirmed_net),
         wt_um: f.wt_um || null,
+        tire_count: f.tire_count === '' ? null : parseInt(f.tire_count, 10),
       }, unit.id)
       onSaved()
     } catch (ex) { setErr(ex.message); setBusy(false) }
@@ -74,6 +76,12 @@ export default function WeightsModal({ unit, close, onSaved }) {
           <div className="field">
             <label>Unit of measure</label>
             <input value={f.wt_um} onChange={(e) => setF({ ...f, wt_um: e.target.value })} placeholder="LB / EA" />
+          </div>
+          <div className="field">
+            <label>Tire count</label>
+            <input type="number" min="0" value={f.tire_count}
+              onChange={(e) => setF({ ...f, tire_count: e.target.value })} />
+            <div className="fieldnote">Feeds per-tire deductions; leave blank if not counted.</div>
           </div>
         </div>
 

@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import Modal from './Modal'
-import { saveParty, saveContact } from '../lib/api'
+import { saveParty, saveContact, saveDeduction, deleteDeduction } from '../lib/api'
 
 const F = (v) => v ?? ''
 const newContact = () => ({ id: null, name: '', email: '', phone: '', is_default: false, active: true, _dirty: true })
+const newDeduction = () => ({ id: null, description: '', kind: 'weight', basis: 'per_unit', rate: '', _dirty: true })
 
 export default function PartyForm({ party, groups, close, onSaved }) {
   const editing = !!party
@@ -14,6 +15,19 @@ export default function PartyForm({ party, groups, close, onSaved }) {
     const next = contacts.slice()
     next[i] = { ...next[i], [key]: value, _dirty: true }
     setContacts(next)
+  }
+  const [deds, setDeds] = useState(
+    (party?.deductions || []).map((d) => ({ ...d, _dirty: false })),
+  )
+  const [removedDeds, setRemovedDeds] = useState([])
+  const setDed = (i, key, value) => {
+    const next = deds.slice()
+    next[i] = { ...next[i], [key]: value, _dirty: true }
+    setDeds(next)
+  }
+  const removeDed = (i) => {
+    if (deds[i].id) setRemovedDeds([...removedDeds, deds[i].id])
+    setDeds(deds.filter((_, j) => j !== i))
   }
   const [f, setF] = useState({
     name: F(party?.name),
@@ -50,6 +64,12 @@ export default function PartyForm({ party, groups, close, onSaved }) {
           if (!c._dirty || (!c.id && !c.name.trim())) continue
           const { _dirty, id, ...fields } = c
           await saveContact(id ? fields : { ...fields, party_id: party.id }, id)
+        }
+        for (const id of removedDeds) await deleteDeduction(id)
+        for (const d of deds) {
+          if (!d._dirty || d.rate === '' || !d.description.trim()) continue
+          const { _dirty, id, ...fields } = d
+          await saveDeduction(id ? { ...fields, rate: Number(fields.rate) } : { ...fields, rate: Number(fields.rate), party_id: party.id }, id)
         }
       }
       onSaved()
@@ -124,6 +144,34 @@ export default function PartyForm({ party, groups, close, onSaved }) {
             <textarea value={f.report_recipients} onChange={set('report_recipients')}
               placeholder="one email per line or comma-separated — e.g. the FedEx managers list" />
           </div>
+
+          {editing && (
+            <div className="field full">
+              <label>Standard deduction schedule</label>
+              <div className="fieldnote" style={{ marginBottom: 6 }}>
+                Weight rows reduce billable pounds before pricing; dollar rows subtract after.
+                Applied to suggestions only when the deduction model above is <b>Standard</b>.
+              </div>
+              {deds.map((d, i) => (
+                <div key={d.id ?? `new-${i}`} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                  <input style={{ flex: 3 }} placeholder="Description (Wood floor, Tires…)" value={F(d.description)} onChange={(e) => setDed(i, 'description', e.target.value)} />
+                  <select style={{ flex: 2 }} value={d.kind} onChange={(e) => setDed(i, 'kind', e.target.value)}>
+                    <option value="weight">lbs</option>
+                    <option value="dollars">dollars</option>
+                  </select>
+                  <select style={{ flex: 2 }} value={d.basis} onChange={(e) => setDed(i, 'basis', e.target.value)}>
+                    <option value="per_unit">per unit</option>
+                    <option value="per_tire">per tire</option>
+                  </select>
+                  <input style={{ flex: 2 }} type="number" step="any" min="0" placeholder="Rate" value={F(d.rate)} onChange={(e) => setDed(i, 'rate', e.target.value)} />
+                  <button type="button" title="Remove"
+                    style={{ background: 'none', border: 0, color: 'var(--ink-soft)', fontSize: 14 }}
+                    onClick={() => removeDed(i)}>×</button>
+                </div>
+              ))}
+              <button type="button" className="btn ghost sm" onClick={() => setDeds([...deds, newDeduction()])}>+ Add deduction</button>
+            </div>
+          )}
 
           {editing && (
             <div className="field full">

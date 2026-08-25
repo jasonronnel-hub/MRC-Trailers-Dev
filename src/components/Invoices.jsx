@@ -25,6 +25,12 @@ export default function Invoices({ data, role, refresh }) {
   const [disputeInv, setDisputeInv] = useState(null)
 
   const writable = can(role, 'editInvoice')
+  // Standard-model buyers get their schedule auto-applied to suggestions;
+  // 'variable' buyers negotiate per deal, so nothing is assumed.
+  const buyerDeductions = (inv) => {
+    const buyer = parties.find((p) => p.id === inv.buyer?.id)
+    return buyer?.deduction_model === 'standard' ? (buyer.deductions || []) : []
+  }
   const saved = () => { setFormInv(null); setAttachInv(null); setPayInv(null); setDisputeInv(null); setDrawerInv(null); refresh() }
   const disputedCount = invoices.filter((i) => i.disputed).length
 
@@ -97,6 +103,7 @@ export default function Invoices({ data, role, refresh }) {
 
       {drawerInv && (
         <InvoiceDrawer invoice={drawerInv} writable={writable} role={role}
+          deductions={buyerDeductions(drawerInv)}
           close={() => setDrawerInv(null)}
           onEdit={() => setFormInv(drawerInv)}
           onAttach={() => setAttachInv(drawerInv)}
@@ -110,6 +117,7 @@ export default function Invoices({ data, role, refresh }) {
       )}
       {attachInv && (
         <AttachToInvoiceModal invoice={attachInv} statuses={statuses}
+          deductions={buyerDeductions(attachInv)}
           close={() => setAttachInv(null)} onSaved={saved} />
       )}
       {payInv && <MarkPaidModal invoice={payInv} close={() => setPayInv(null)} onSaved={saved} />}
@@ -118,14 +126,14 @@ export default function Invoices({ data, role, refresh }) {
   )
 }
 
-function InvoiceDrawer({ invoice: i, writable, role, close, onEdit, onAttach, onPay, onDispute, onResolve }) {
+function InvoiceDrawer({ invoice: i, writable, role, deductions = [], close, onEdit, onAttach, onPay, onDispute, onResolve }) {
   const [units, setUnits] = useState(null)
   const [weightsUnit, setWeightsUnit] = useState(null)
   const notesState = useNotes('invoice', i.id)
   const loadUnits = () => fetchInvoiceUnits(i.id).then(setUnits).catch(() => setUnits([]))
   useEffect(() => { loadUnits() }, [i.id])   // eslint-disable-line react-hooks/exhaustive-deps
 
-  const suggested = (units || []).reduce((s, u) => s + (suggestedUnitAmount(u) ?? 0), 0)
+  const suggested = (units || []).reduce((s, u) => s + (suggestedUnitAmount(u, deductions) ?? 0), 0)
 
   const exportCsv = () => {
     const header = 'unit_number,vin,type,net_wt,confirmed_net,so,price,price_unit,suggested_amount'
@@ -133,7 +141,7 @@ function InvoiceDrawer({ invoice: i, writable, role, close, onEdit, onAttach, on
       u.unit_number ?? '', u.vin ?? '', u.equipment_type?.name ?? '',
       u.net_wt ?? '', u.confirmed_net ?? '',
       u.sales_order?.order_number ?? '', u.sales_order?.price ?? '', u.sales_order?.price_unit ?? '',
-      suggestedUnitAmount(u)?.toFixed(2) ?? '',
+      suggestedUnitAmount(u, deductions)?.toFixed(2) ?? '',
     ].map((v) => `"${String(v).replaceAll('"', '""')}"`).join(','))
     const url = URL.createObjectURL(new Blob([[header, ...lines].join('\n')], { type: 'text/csv' }))
     const a = document.createElement('a')
@@ -361,7 +369,7 @@ function InvoiceForm({ invoice, invoices, parties, close, onSaved }) {
 }
 
 // Attach Delivered — Invoice Required units. Server-backed, explicit checks.
-function AttachToInvoiceModal({ invoice, statuses, close, onSaved }) {
+function AttachToInvoiceModal({ invoice, statuses, deductions = [], close, onSaved }) {
   const [q, setQ] = useState('')
   const [deliveredOnly, setDeliveredOnly] = useState(true)
   const [candidates, setCandidates] = useState(null)
@@ -401,7 +409,7 @@ function AttachToInvoiceModal({ invoice, statuses, close, onSaved }) {
     setSelected(next)
   }
 
-  const suggested = [...selected.values()].reduce((s, u) => s + (suggestedUnitAmount(u) ?? 0), 0)
+  const suggested = [...selected.values()].reduce((s, u) => s + (suggestedUnitAmount(u, deductions) ?? 0), 0)
 
   const submit = async () => {
     setBusy(true); setErr('')
@@ -440,7 +448,7 @@ function AttachToInvoiceModal({ invoice, statuses, close, onSaved }) {
               <span className="ticket">W{u.legacy_bwt_id ?? u.id}</span>
               <b>{u.unit_number || '—'}</b>
               <span className="muted">{u.confirmed_net ?? u.net_wt ?? '—'} lb</span>
-              <span className="muted" style={{ marginLeft: 'auto' }}>{money(suggestedUnitAmount(u))}</span>
+              <span className="muted" style={{ marginLeft: 'auto' }}>{money(suggestedUnitAmount(u, deductions))}</span>
               <Pill status={u.status?.name} />
             </label>
           ))}

@@ -54,7 +54,15 @@ export default function PartyDrawer({ party: p, orders, dispatches = [], role, c
               <dt>Deductions</dt>
               <dd>
                 {DEDUCTION_LABELS[p.deduction_model] || '—'}
-                {p.standard_deductions && <span className="muted"> — {p.standard_deductions}</span>}
+                {(p.deductions || []).length > 0 ? (
+                  <div style={{ fontSize: 12.5, marginTop: 2 }}>
+                    {p.deductions.map((d) => (
+                      <div key={d.id} className="muted">
+                        {d.description}: {d.kind === 'weight' ? `${Number(d.rate).toLocaleString()} lb` : `$${Number(d.rate).toLocaleString()}`} {d.basis === 'per_tire' ? 'per tire' : 'per unit'}
+                      </div>
+                    ))}
+                  </div>
+                ) : p.standard_deductions && <span className="muted"> — {p.standard_deductions}</span>}
               </dd>
               <dt>Destruction</dt>
               <dd>
