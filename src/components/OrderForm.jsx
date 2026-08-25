@@ -96,7 +96,9 @@ export default function OrderForm({ order, orders, parties, equipTypes, close, o
             <label>Price unit</label>
             <select value={f.price_unit} onChange={set('price_unit')}>
               <option value="per_lb">per lb</option>
-              <option value="per_ton">per ton</option>
+              <option value="per_nt">per net ton (2,000 lb)</option>
+              <option value="per_gt">per gross ton (2,240 lb)</option>
+              <option value="per_mt">per metric tonne (2,204.6 lb)</option>
               <option value="flat">flat</option>
             </select>
           </div>

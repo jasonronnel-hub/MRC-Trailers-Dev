@@ -359,6 +359,16 @@ export async function resolveInvoiceDispute(id) {
   if (error) throw error
 }
 
+// The three tons of the scrap trade (weights are always stored in POUNDS;
+// these convert only at pricing time). 'per_ton' is the legacy value from
+// before the distinction and meant the industry-default net ton.
+export const LB_PER = {
+  per_nt: 2000,          // net / short ton
+  per_gt: 2240,          // gross / long ton
+  per_mt: 2204.62262,    // metric tonne
+  per_ton: 2000,         // legacy alias
+}
+
 // Suggested invoice amount from a unit's SO pricing — a HELPER for Katherine,
 // never authoritative (settlement weights/deductions are her Phase 3b domain).
 export function suggestedUnitAmount(u) {
@@ -368,7 +378,8 @@ export function suggestedUnitAmount(u) {
   if (unit === 'flat') return Number(price)
   const wt = u.confirmed_net ?? u.net_wt
   if (wt == null) return null
-  return unit === 'per_ton' ? (Number(price) * wt) / 2000 : Number(price) * wt
+  const perLb = LB_PER[unit]
+  return perLb ? (Number(price) * wt) / perLb : Number(price) * wt
 }
 
 // ---- dispatch (Phase 3 strawman — workflow provisional until Kim's pass) ----
@@ -444,6 +455,8 @@ export function formatPrice(price, unit) {
   const n = Number(price)
   const amount = n.toLocaleString(undefined, { maximumFractionDigits: 2 })
   if (unit === 'per_lb') return `$${amount} / lb`
-  if (unit === 'per_ton') return `$${amount} / ton`
+  if (unit === 'per_nt' || unit === 'per_ton') return `$${amount} / NT`
+  if (unit === 'per_gt') return `$${amount} / GT`
+  if (unit === 'per_mt') return `$${amount} / MT`
   return `$${amount} flat`
 }

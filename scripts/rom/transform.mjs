@@ -172,7 +172,10 @@ if (stOrders.length !== stOrdersRaw.length) {
 const priceUnit = (wtum) => {
   const w = (wtum || '').toLowerCase()
   if (w.includes('lb')) return 'per_lb'
-  if (w.includes('ton') || w === 'nt' || w === 'gt') return 'per_ton'
+  // ROM's real values on trailer-scope lines: LB, EA/Each, GT, NT, NTon.
+  if (w === 'gt' || w.includes('gross')) return 'per_gt'
+  if (w === 'mt' || w.includes('tonne') || w.includes('metric')) return 'per_mt'
+  if (w === 'nt' || w.includes('nton') || w.includes('ton')) return 'per_nt'
   return 'flat'
 }
 const orderRows = stOrders.map((o) => ({

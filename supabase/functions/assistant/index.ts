@@ -36,7 +36,7 @@ Reply with ONE JSON object only, no prose outside it:
 ACTION TYPES (include only what's needed; use [] for pure questions):
 - create_buyer: {type,name,billing_address?,payment_terms?,payment_method?,deduction_model?("none"|"standard"|"variable"),standard_deductions?,destruction_agreement_signed?(YYYY-MM-DD),rema_member?(bool),merged_parent?(bool),general_notes?}
 - update_buyer: {type,buyer:"<name or id>", ...any buyer fields to change}
-- create_order: {type,buyer:"<name or id>",customer_reference?(e.g. "AUG 26"),item_code?(7000-series),price_unit?("per_lb"|"per_ton"|"flat"),price?,ref_weight_lbs?,header_notes?}
+- create_order: {type,buyer:"<name or id>",customer_reference?(e.g. "AUG 26"),item_code?(7000-series),price_unit?("per_lb"|"per_nt" net ton 2000lb|"per_gt" gross ton 2240lb|"per_mt" metric tonne|"flat"),price?,ref_weight_lbs?,header_notes?}
 - add_units: {type,units:[{unit_number,vin,source(fleet name),equipment_type,physical_location?,pickup_location_code?,pickup_address?,condition_comments?,purchase_price?}]}
 - attach_units: {type,buyer?,salesOrder?:"<SO # or ref>",units:{ids?:[],unitNumbers?:[],source?,status?,equipmentType?,physicalLocation?}} // attaching flips units to Sold — Dispatch Required
 - set_status: {type,status:<one of the exact status strings>,units:{...same selector...}}

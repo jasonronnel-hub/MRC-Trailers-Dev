@@ -74,7 +74,7 @@ for (const b of buyers) {
 console.log('Seeding sales orders…')
 const orders = [
   { order_number: 'SO-1041', buyer: 'SA Recycling', customer_reference: 'AUG 26', item_code: '7010', price: 0.17, price_unit: 'per_lb', ref_weight_lbs: 8500, header_notes: 'No deductions — blended price per SA email 8/12 3:14pm.' },
-  { order_number: 'SO-1042', buyer: 'Pacific Steel & Recycling', customer_reference: 'AUG 26', item_code: '7040', price: 190, price_unit: 'per_ton', ref_weight_lbs: 10000, header_notes: 'Std deduction: none on aluminum containers. Confirmed 8/10.' },
+  { order_number: 'SO-1042', buyer: 'Pacific Steel & Recycling', customer_reference: 'AUG 26', item_code: '7040', price: 190, price_unit: 'per_gt', ref_weight_lbs: 10000, header_notes: 'Std deduction: none on aluminum containers. Confirmed 8/10.' },
 ]
 const orderIds = {}
 for (const o of orders) {
