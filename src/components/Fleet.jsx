@@ -36,8 +36,10 @@ export default function Fleet({ data, role }) {
   const prevTotals = prevCells ? new Map(totalsByType(prevCells)) : null
   const grand = cells ? cells.reduce((s, c) => s + c.n, 0) : 0
 
-  // Aging: share of the selected snapshot that is 15+ years old.
-  const cutoffYear = new Date().getFullYear() - 15
+  // Aging horizon: FXG extended trailer maintenance life from 15 to 21+
+  // years (TJ, Aug 2026), so 21 is the default; selectable for comparison.
+  const [life, setLife] = useState(21)
+  const cutoffYear = new Date().getFullYear() - life
   const oldCount = cells ? cells.filter((c) => c.model_year && c.model_year <= cutoffYear).reduce((s, c) => s + c.n, 0) : 0
 
   return (
@@ -76,7 +78,12 @@ export default function Fleet({ data, role }) {
                 <div><div style={{ fontSize: 24, fontWeight: 700 }}>{totals.length}</div><div className="muted" style={{ fontSize: 11 }}>equipment types</div></div>
                 <div>
                   <div style={{ fontSize: 24, fontWeight: 700 }}>{grand ? Math.round((oldCount / grand) * 100) : 0}%</div>
-                  <div className="muted" style={{ fontSize: 11 }}>15+ years old ({oldCount.toLocaleString()} assets)</div>
+                  <div className="muted" style={{ fontSize: 11 }}>
+                    <select value={life} onChange={(e) => setLife(Number(e.target.value))}
+                      style={{ border: 'none', background: 'none', color: 'inherit', fontSize: 11, padding: 0 }}>
+                      {[15, 18, 21].map((y) => <option key={y} value={y}>{y}+ years old</option>)}
+                    </select> ({oldCount.toLocaleString()} assets — FXG life now 21+ yrs per TJ)
+                  </div>
                 </div>
                 {prevTotals && (
                   <div>
@@ -123,8 +130,9 @@ export default function Fleet({ data, role }) {
                 </div>
               )}
               <p className="muted" style={{ fontSize: 12 }}>
-                Labels are the supplier’s own (BC/RC meanings: ask Selena). Negative deltas =
-                assets that left the fleet since the prior report — the retirement pipeline.
+                Labels are the supplier’s own — BC = bonded composite, RC = regular composite
+                (per TJ). Negative deltas = assets that left the fleet since the prior report —
+                the retirement pipeline.
               </p>
             </>
           )}

@@ -1,4 +1,4 @@
-rom_id,rom_value,uses,map_to,review
+rom_id,rom_value,uses,map_to,review,material
 1447,53SR,6533,Long Straight Rail,
 1484,28DF,5533,Drop Frame Pup,
 1486,53' Steel Intermodal Container,3213,Steel Container,
@@ -12,7 +12,7 @@ rom_id,rom_value,uses,map_to,review
 1485,53' Container - Steel wall Wd Floor Alum roof,162,Steel Container,
 1496,Tractor,151,Tractor,
 1481,53' Composite Trailer,102,Composite,
-1458,Duraplate - St Sides SPLIT Al/Wd Floor Al roof,47,Composite,REVIEW: Duraplate = composite?
+1458,Duraplate - St Sides SPLIT Al/Wd Floor Al roof,47,Long Straight Rail,,Composite (bonded)
 1497,Switcher,41,Switcher,
 1653,45' SR,32,Long Straight Rail,
 1656,UNPREPARED STEEL SCRAP,26,,REVIEW: 26 units typed as scrap commodity
@@ -27,11 +27,11 @@ rom_id,rom_value,uses,map_to,review
 1451,Armorplate - Alum Sides Alum Floor Alum Roof,6,Long Straight Rail,REVIEW
 1707,PACKAGE / SPRINTER VANS,6,,REVIEW: vans — new type or skip?
 1700,MOD DOCK,4,,REVIEW
-1461,53' Duraplate Trailer - Wood Floor,4,Composite,REVIEW
+1461,53' Duraplate Trailer - Wood Floor,4,Long Straight Rail,,Composite (bonded)
 1477,53FRP,4,FRP,
 1476,53' FRP Trailer,3,FRP,
 1482,DF - Alum Sides Alum Floor Alum Roof,3,Drop Frame Pup,
-1454,Duraplate - St Sides Wd Floor Alum Roof,3,Composite,REVIEW
+1454,Duraplate - St Sides Wd Floor Alum Roof,3,Long Straight Rail,,Composite (bonded)
 1446,53' Trailer - Alum Wall Wood Floor,3,Long Straight Rail,
 1437,SR - Alum Sides Wd Floor Alum Roof,2,Long Straight Rail,REVIEW: SR length unknown
 1471,FRP Sides Wd Floor Trans Roof,2,FRP,

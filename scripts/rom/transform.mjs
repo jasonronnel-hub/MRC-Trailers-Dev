@@ -83,7 +83,21 @@ const equipIdByName = (n) => equipTypes.find((t) => t.name === n)?.id ?? null
 // PRIMARY type source: TrailerTypeInvID → EntInventory items (populated on
 // 23,080/23,081 units, clean values). The dirty TrailerSizes table is only
 // the fallback for the handful of units the type crosswalk can't place.
-const typeXwalk = readCrosswalk('trailer_types.csv')   // rom inventory id -> equipment type name
+// The types crosswalk carries an optional 6th `material` column (e.g.
+// Duraplate → sold as steel trailers, material "Composite (bonded)" — TJ's
+// ruling; some buyers have strict no-composite rules, so it must stay visible).
+function readTypeCrosswalk(file) {
+  const map = new Map() // rom_id -> { type, material }
+  const lines = readFileSync(`scripts/rom/crosswalks/${file}`, 'utf8').split('\n').slice(1)
+  for (const line of lines) {
+    if (!line.trim()) continue
+    const parts = line.split(',')
+    const id = int(parts[0])
+    if (id != null) map.set(id, { type: (parts[3] || '').trim() || null, material: (parts[5] || '').trim() || null })
+  }
+  return map
+}
+const typeXwalk = readTypeCrosswalk('trailer_types.csv')
 const sizeXwalk = readCrosswalk('trailer_sizes.csv')   // FALLBACK: rom size id -> equipment type name
 const makeXwalk = readCrosswalk('trailer_makes.csv')   // rom make id -> canonical make name
 
@@ -226,7 +240,8 @@ const unitRows = stUnits.map((u) => {
   // SaleOrderID=0 means unsold; some completed units carry the sale in BrokerWTDTL.SOID (Field Mapping §9.3)
   let legacySo = int(u.sale_order_id) || null
   if (!legacySo && int(u.dtl_soid)) { legacySo = int(u.dtl_soid); soidFallbacks++ }
-  const typeName = typeXwalk.get(int(u.type_inv_id)) ?? sizeXwalk.get(int(u.size_id)) ?? null
+  const typeEntry = typeXwalk.get(int(u.type_inv_id))
+  const typeName = typeEntry?.type ?? sizeXwalk.get(int(u.size_id)) ?? null
   return {
     legacy_bwt_id: int(u.bwt_id),
     unit_number: u.unit_num || null, alt_unit_number: u.alt_unit_num || null,
@@ -261,7 +276,7 @@ const unitRows = stUnits.map((u) => {
     purch_ticket_ref: int(u.purch_ticket_id) ? String(u.purch_ticket_id) : null,
     sales_ticket_ref: int(u.sales_ticket_id) ? String(u.sales_ticket_id) : null,
     wt_um: u.wt_um || null,
-    material_type: u.material_type || null,
+    material_type: u.material_type || typeEntry?.material || null,
     voided: u.void === '1',
   }
 }).filter((u) => u.legacy_bwt_id != null)
