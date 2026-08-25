@@ -28,6 +28,7 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
     purchase_price: F(unit?.purchase_price),
     ref_weight_lbs: F(unit?.ref_weight_lbs),
     condition_comments: F(unit?.condition_comments),
+    material_type: F(unit?.material_type),
     voided: unit?.voided ?? false,
   })
   const [err, setErr] = useState('')
@@ -65,6 +66,7 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
         purchase_price: f.purchase_price === '' ? null : Number(f.purchase_price),
         ref_weight_lbs: f.ref_weight_lbs === '' ? null : parseInt(f.ref_weight_lbs, 10),
         condition_comments: f.condition_comments || null,
+        material_type: f.material_type || null,
         voided: f.voided,
       }, unit?.id)
       onSaved()
@@ -145,6 +147,11 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
           <div className="field">
             <label>Ref weight (lb)</label>
             <input type="number" min="0" value={f.ref_weight_lbs} onChange={set('ref_weight_lbs')} />
+          </div>
+          <div className="field">
+            <label>Material (optional)</label>
+            <input value={f.material_type} onChange={set('material_type')} placeholder="e.g. Steel – Auto Body" />
+            <div className="fieldnote">Free text, used ad-hoc — shows in Kim’s buyer email when set.</div>
           </div>
           <div className="field full">
             <label>Condition comments</label>
