@@ -40,6 +40,12 @@ left column, stop and think; the right column is expected to churn.
   strawman's choices.
 - **Invoicing** — stays in ROM until Phase 3b *with Katherine*. `Invoiced —
   Closed` status and `confirmed_*` weights are the only hooks so far.
+  **Invoiced ≠ paid** (Jason, Aug 2026): ROM tracks payment on the Invoice
+  table (`isOpen`, `PaymentRecDate`, `CashPaid/CheckPaid/WirePaid`, `DueDate`)
+  plus a full AR ledger with partial application (`ARAppliedByInvoice`,
+  `ARUnapplied`). Phase 3b must model invoices as their own entities with
+  open/paid state — NOT as another unit status, because one invoice covers
+  many units and payments apply partially.
 - **`notes` order/dispatch mapping** — legacy notes migrate to units and
   parties today; order-attached notes stay in staging until entity mapping is
   confirmed against real data.

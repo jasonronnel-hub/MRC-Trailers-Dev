@@ -6,6 +6,7 @@ import PartyForm from './PartyForm'
 export default function Buyers({ data, role, refresh }) {
   const { parties, orders, groups } = data
   const [groupFilter, setGroupFilter] = useState('Trailer Buyer')
+  const [q, setQ] = useState('')
   const [drawerParty, setDrawerParty] = useState(null)
   const [formParty, setFormParty] = useState(null)    // null = closed, 'new' = create, object = edit
 
@@ -13,10 +14,16 @@ export default function Buyers({ data, role, refresh }) {
     () => [...new Set(parties.map((p) => p.group?.name).filter(Boolean))].sort(),
     [parties],
   )
-  const rows = useMemo(
-    () => (groupFilter ? parties.filter((p) => p.group?.name === groupFilter) : parties),
-    [parties, groupFilter],
-  )
+  const rows = useMemo(() => {
+    let list = groupFilter ? parties.filter((p) => p.group?.name === groupFilter) : parties
+    if (q.trim()) {
+      const needle = q.trim().toLowerCase()
+      list = list.filter((p) =>
+        [p.name, p.billing_address, p.city, p.state]
+          .some((v) => v && v.toLowerCase().includes(needle)))
+    }
+    return list
+  }, [parties, groupFilter, q])
 
   const saved = () => { setFormParty(null); setDrawerParty(null); refresh() }
 
@@ -31,6 +38,8 @@ export default function Buyers({ data, role, refresh }) {
       </div>
 
       <div className="filters">
+        <input className="search" placeholder="Search name, city…"
+          value={q} onChange={(e) => setQ(e.target.value)} />
         <span className={'chip' + (!groupFilter ? ' on' : '')} onClick={() => setGroupFilter(null)}>All groups</span>
         {groupNames.map((g) => (
           <span key={g} className={'chip' + (groupFilter === g ? ' on' : '')}

@@ -1,24 +1,22 @@
 import { statusMeta, toneColor } from '../lib/statuses'
 
-export default function PipelineRail({ statuses, units, statusFilter, setStatusFilter }) {
-  const counts = {}
-  for (const s of statuses) counts[s.name] = 0
-  for (const u of units) if (u.status) counts[u.status.name] = (counts[u.status.name] || 0) + 1
-
+// Counts come from the unit_status_counts() RPC — always global, never
+// dependent on what page/filter the inventory table is showing.
+export default function PipelineRail({ statuses, counts, statusFilter, setStatusFilter }) {
   return (
     <div className="rail">
       {statuses
-        .filter((s) => s.name !== 'State Unknown' || counts[s.name] > 0)
+        .filter((s) => s.name !== 'State Unknown' || (counts[s.id] ?? 0) > 0)
         .map((s) => {
           const m = statusMeta(s.name)
           return (
             <div
               key={s.id}
-              className={'rail-stage' + (statusFilter === s.name ? ' active' : '')}
-              onClick={() => setStatusFilter(statusFilter === s.name ? null : s.name)}
+              className={'rail-stage' + (statusFilter === s.id ? ' active' : '')}
+              onClick={() => setStatusFilter(statusFilter === s.id ? null : s.id)}
               title={s.name}
             >
-              <div className="cnt">{counts[s.name] ?? 0}</div>
+              <div className="cnt">{(counts[s.id] ?? 0).toLocaleString()}</div>
               <div className="lbl">{m.short}</div>
               <div className="bar" style={{ background: toneColor(m.tone) }} />
             </div>

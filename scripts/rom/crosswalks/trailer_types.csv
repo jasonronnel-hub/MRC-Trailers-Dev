@@ -1,0 +1,49 @@
+rom_id,rom_value,uses,map_to,review
+1447,53SR,6533,Long Straight Rail,
+1484,28DF,5533,Drop Frame Pup,
+1486,53' Steel Intermodal Container,3213,Steel Container,
+1491,Dolly,2339,Converter Dolly,
+1444,48' Trailer - Alum Wall Wood Floor,1407,Long Straight Rail,
+1625,To Be Determined,1209,,
+1489,53 Container - Alum wall Wd Floor Alum roof,1190,Aluminum Container,
+1709,33DF,377,Drop Frame Pup,
+1494,53' Container Chassis,371,Chassis,
+1441,28SR,275,Straight Rail Pup,
+1485,53' Container - Steel wall Wd Floor Alum roof,162,Steel Container,
+1496,Tractor,151,Tractor,
+1481,53' Composite Trailer,102,Composite,
+1458,Duraplate - St Sides SPLIT Al/Wd Floor Al roof,47,Composite,REVIEW: Duraplate = composite?
+1497,Switcher,41,Switcher,
+1653,45' SR,32,Long Straight Rail,
+1656,UNPREPARED STEEL SCRAP,26,,REVIEW: 26 units typed as scrap commodity
+1488,40' Steel Container,20,Steel Container,
+1479,28' Composite Pup Trailer,18,Composite,REVIEW: composite or pup bucket?
+1445,Armorplate - Alum Sides Wd Floor Alum Roof,15,Long Straight Rail,REVIEW
+1652,REFRIGERATION TRAILERS,10,,REVIEW: reefer — new equipment type?
+1651,28' Trailer S&P Alum Floor,8,Straight Rail Pup,REVIEW
+1470,53' Steel Trailer - Wood Floor,8,Long Straight Rail,
+1483,28' DF Alum Pup Trailer,8,Drop Frame Pup,
+1493,Chassis,6,Chassis,
+1451,Armorplate - Alum Sides Alum Floor Alum Roof,6,Long Straight Rail,REVIEW
+1707,PACKAGE / SPRINTER VANS,6,,REVIEW: vans — new type or skip?
+1700,MOD DOCK,4,,REVIEW
+1461,53' Duraplate Trailer - Wood Floor,4,Composite,REVIEW
+1477,53FRP,4,FRP,
+1476,53' FRP Trailer,3,FRP,
+1482,DF - Alum Sides Alum Floor Alum Roof,3,Drop Frame Pup,
+1454,Duraplate - St Sides Wd Floor Alum Roof,3,Composite,REVIEW
+1446,53' Trailer - Alum Wall Wood Floor,3,Long Straight Rail,
+1437,SR - Alum Sides Wd Floor Alum Roof,2,Long Straight Rail,REVIEW: SR length unknown
+1471,FRP Sides Wd Floor Trans Roof,2,FRP,
+1462,St Sides Wd Floor Alum Roof,2,Long Straight Rail,REVIEW
+1487,20' Steel Container,2,Steel Container,
+1495,Unprepared Steel Chassis,2,Chassis,
+1693,NON-INVENTORY COMMODITY,1,,
+1490,53' Aluminum Intermodal Container,1,Aluminum Container,
+1464,St Sides Alum Floor Alum Roof,1,Long Straight Rail,REVIEW
+1469,48' Steel Trailer - Wood Floor,1,Long Straight Rail,
+1475,48' FRP Trailer,1,FRP,
+1440,28' Pup Trailer - Alum Sides Wood Floor,1,Straight Rail Pup,REVIEW
+-30,<SELECT ITEM>,1,,
+1004,NO. 1 COPPER,1,,
+1450,SR - Alum Sides Alum Floor Fiber roof,1,Straight Rail Pup,REVIEW

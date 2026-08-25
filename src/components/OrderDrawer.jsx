@@ -1,8 +1,13 @@
+import { useEffect, useState } from 'react'
 import Pill from './Pill'
-import { formatPrice } from '../lib/api'
+import { formatPrice, fetchOrderUnits } from '../lib/api'
 
 export default function OrderDrawer({ order: o, close, onEdit, onAttach }) {
-  const units = o.units || []
+  const [units, setUnits] = useState(null)   // lazy-loaded, null = loading
+  useEffect(() => {
+    fetchOrderUnits(o.id).then(setUnits).catch(() => setUnits([]))
+  }, [o.id])
+
   return (
     <div className="drawer-wrap" onClick={close}>
       <div className="drawer" onClick={(e) => e.stopPropagation()}>
@@ -31,8 +36,10 @@ export default function OrderDrawer({ order: o, close, onEdit, onAttach }) {
           {o.header_notes && <div className="banner"><b>Header note:</b> {o.header_notes}</div>}
           {o.detail_notes && <div className="banner"><b>Detail note:</b> {o.detail_notes}</div>}
 
-          <b>Attached units ({units.length})</b>
-          {units.length ? (
+          <b>Attached units{units ? ` (${units.length})` : ''}</b>
+          {units === null ? (
+            <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>Loading…</div>
+          ) : units.length ? (
             <div className="tablewrap" style={{ marginTop: 8 }}>
               <table>
                 <tbody>

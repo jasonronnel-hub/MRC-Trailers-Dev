@@ -1,22 +1,33 @@
 import { supabase } from './supabase'
 
-// Fetch-everything is fine at seed scale; once ROM's 23k units migrate in,
-// switch the rail counts to a grouped RPC and paginate the tables.
+// Scale architecture (23k+ units after migration):
+//   * fetchAll loads only the SMALL data — lookups, parties, orders and
+//     dispatches WITHOUT their unit lists (just counts).
+//   * Units are always server-filtered + paginated (fetchUnitsPage).
+//   * Rail counts come from the unit_status_counts() RPC — global,
+//     RLS-respecting, independent of pagination.
+//   * Drawers lazy-load their unit lists (fetchOrderUnits /
+//     fetchDispatchUnits), same pattern as notes.
+
+export const UNIT_SELECT = `
+  id, legacy_bwt_id, unit_number, alt_unit_number, vin, model_year,
+  purchase_price, pickup_location_code, pickup_address, physical_location,
+  condition_comments, ref_weight_lbs, title_received, voided, missing,
+  purchase_location, purchase_location_address, sale_location, sale_cust_ref,
+  deliver_wt_ref, purch_ticket_ref, sales_ticket_ref, wt_um, material_type,
+  gross_wt, tare_wt, net_wt, confirmed_net,
+  status:unit_statuses ( id, name, sort_order ),
+  equipment_type:equipment_types ( name, item_code ),
+  title_type:title_types ( name ),
+  source:parties!units_source_party_id_fkey ( id, name ),
+  sold_to:parties!units_sold_to_party_id_fkey ( id, name ),
+  sales_order:sales_orders ( id, order_number, customer_reference ),
+  dispatch:dispatches ( id, dispatch_number )
+`
+
 export async function fetchAll() {
-  const [statuses, units, parties, orders, groups, equipTypes, titleTypes, dispatches] = await Promise.all([
+  const [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches] = await Promise.all([
     supabase.from('unit_statuses').select('id, name, sort_order').order('sort_order'),
-    supabase.from('units').select(`
-      id, legacy_bwt_id, unit_number, alt_unit_number, vin, model_year,
-      purchase_price, pickup_location_code, pickup_address, physical_location,
-      condition_comments, ref_weight_lbs, title_received, voided,
-      status:unit_statuses ( id, name, sort_order ),
-      equipment_type:equipment_types ( name, item_code ),
-      title_type:title_types ( name ),
-      source:parties!units_source_party_id_fkey ( id, name ),
-      sold_to:parties!units_sold_to_party_id_fkey ( id, name ),
-      sales_order:sales_orders ( id, order_number, customer_reference ),
-      dispatch:dispatches ( id, dispatch_number )
-    `).eq('voided', false).order('id'),
     supabase.from('parties').select(`
       id, name, billing_address, city, state, zip,
       payment_terms, payment_method, credit_limit,
@@ -25,13 +36,13 @@ export async function fetchAll() {
       purchase_hot_notes, active,
       group:party_groups ( id, name ),
       contacts:party_contacts ( id, name, email, phone, is_default, active )
-    `).eq('active', true).order('name'),
+    `).eq('active', true).order('name').limit(10000),
     supabase.from('sales_orders').select(`
       id, order_number, customer_reference, item_code, price, price_unit,
-      ref_weight_lbs, header_notes, detail_notes, open, created_at,
+      ref_weight_lbs, header_notes, detail_notes, open, closed_at, created_at,
       buyer:parties ( id, name ),
-      units ( id, legacy_bwt_id, unit_number, status:unit_statuses ( name ) )
-    `).order('id'),
+      units ( count )
+    `).order('id', { ascending: false }).limit(10000),
     supabase.from('party_groups').select('id, name').order('name'),
     supabase.from('equipment_types').select('id, name, item_code, default_ref_weight_lbs').eq('active', true).order('name'),
     supabase.from('title_types').select('id, name'),
@@ -41,17 +52,90 @@ export async function fetchAll() {
       notes, cancelled, created_at,
       hauler:parties!dispatches_hauler_party_id_fkey ( id, name, phone, email ),
       destination:parties!dispatches_destination_party_id_fkey ( id, name, billing_address ),
-      units ( id, legacy_bwt_id, unit_number, vin,
-              status:unit_statuses ( name ),
-              equipment_type:equipment_types ( name ),
-              sales_order:sales_orders ( order_number, customer_reference ) )
-    `).order('id'),
+      units ( count )
+    `).order('id', { ascending: false }).limit(10000),
   ])
-  for (const r of [statuses, units, parties, orders, groups, equipTypes, titleTypes, dispatches]) if (r.error) throw r.error
+  for (const r of [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches]) if (r.error) throw r.error
   return {
-    statuses: statuses.data, units: units.data, parties: parties.data, orders: orders.data,
+    statuses: statuses.data, parties: parties.data, orders: orders.data,
     groups: groups.data, equipTypes: equipTypes.data, titleTypes: titleTypes.data,
     dispatches: dispatches.data,
+  }
+}
+
+// Global per-status counts for the pipeline rail (voided excluded).
+export async function fetchStatusCounts() {
+  const { data, error } = await supabase.rpc('unit_status_counts')
+  if (error) throw error
+  const counts = {}
+  for (const row of data) counts[row.status_id] = Number(row.n)
+  return counts
+}
+
+// The one way units are listed anywhere in the app. All narrowing happens in
+// the database; the browser only ever holds one page.
+//
+// filters: { statusIds?, notStatusIds?, sourceId?, buyerId?, equipTypeId?,
+//            q?, missingOnly?, unattachedSO?, unattachedDispatch?, voided? }
+// sort:    { col: 'id'|'unit_number'|'physical_location'|'status'|'model_year', dir: 'asc'|'desc' }
+export async function fetchUnitsPage({ filters = {}, sort = {}, page = 0, pageSize = 50 } = {}) {
+  let q = supabase.from('units').select(UNIT_SELECT, { count: 'exact' })
+
+  q = q.eq('voided', filters.voided === true)
+  if (filters.statusIds?.length) q = q.in('status_id', filters.statusIds)
+  if (filters.notStatusIds?.length) {
+    for (const id of filters.notStatusIds) q = q.neq('status_id', id)
+  }
+  if (filters.sourceId) q = q.eq('source_party_id', filters.sourceId)
+  if (filters.buyerId) q = q.eq('sold_to_party_id', filters.buyerId)
+  if (filters.equipTypeId) q = q.eq('equipment_type_id', filters.equipTypeId)
+  if (filters.missingOnly) q = q.eq('missing', true)
+  if (filters.unattachedSO) q = q.is('sales_order_id', null)
+  if (filters.unattachedDispatch) q = q.is('dispatch_id', null)
+  if (filters.q?.trim()) {
+    const needle = filters.q.trim().replaceAll(',', ' ').replaceAll('%', '')
+    q = q.or(['unit_number', 'alt_unit_number', 'vin', 'physical_location']
+      .map((c) => `${c}.ilike.%${needle}%`).join(','))
+  }
+
+  const SORT_COLS = { id: 'id', unit_number: 'unit_number', physical_location: 'physical_location', status: 'status_id', model_year: 'model_year' }
+  const col = SORT_COLS[sort.col]
+  if (col) q = q.order(col, { ascending: sort.dir !== 'desc', nullsFirst: false })
+  else q = q.order('status_id').order('id')
+
+  const from = page * pageSize
+  const { data, count, error } = await q.range(from, from + pageSize - 1)
+  if (error) throw error
+  return { rows: data, count: count ?? 0 }
+}
+
+export async function fetchOrderUnits(orderId) {
+  const { data, error } = await supabase.from('units')
+    .select(UNIT_SELECT).eq('sales_order_id', orderId).order('id').limit(1000)
+  if (error) throw error
+  return data
+}
+
+export async function fetchDispatchUnits(dispatchId) {
+  const { data, error } = await supabase.from('units')
+    .select(UNIT_SELECT).eq('dispatch_id', dispatchId).order('id').limit(1000)
+  if (error) throw error
+  return data
+}
+
+// Every non-voided unit still in the active pipeline (everything except
+// Invoiced — Closed). Bounded by how the business actually runs (~1-2k),
+// which is what makes the Tuesday Report and the assistant selectors safe.
+export async function fetchActiveUnits(statuses) {
+  const closed = statuses.find((s) => s.name === 'Invoiced — Closed')?.id
+  const out = []
+  for (let page = 0; ; page++) {
+    const { rows } = await fetchUnitsPage({
+      filters: { notStatusIds: closed ? [closed] : [] },
+      page, pageSize: 1000,
+    })
+    out.push(...rows)
+    if (rows.length < 1000) return out
   }
 }
 

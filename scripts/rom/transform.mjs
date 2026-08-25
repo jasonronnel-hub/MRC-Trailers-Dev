@@ -80,7 +80,11 @@ const statusIdByName = (n) => statuses.find((s) => s.name === n)?.id
 const titleId = (n) => titles.find((t) => t.name === n)?.id ?? null
 const equipIdByName = (n) => equipTypes.find((t) => t.name === n)?.id ?? null
 
-const sizeXwalk = readCrosswalk('trailer_sizes.csv')   // rom size id -> equipment type name
+// PRIMARY type source: TrailerTypeInvID → EntInventory items (populated on
+// 23,080/23,081 units, clean values). The dirty TrailerSizes table is only
+// the fallback for the handful of units the type crosswalk can't place.
+const typeXwalk = readCrosswalk('trailer_types.csv')   // rom inventory id -> equipment type name
+const sizeXwalk = readCrosswalk('trailer_sizes.csv')   // FALLBACK: rom size id -> equipment type name
 const makeXwalk = readCrosswalk('trailer_makes.csv')   // rom make id -> canonical make name
 
 // ---------- 1. parties ----------
@@ -183,12 +187,12 @@ const unitRows = stUnits.map((u) => {
   // SaleOrderID=0 means unsold; some completed units carry the sale in BrokerWTDTL.SOID (Field Mapping §9.3)
   let legacySo = int(u.sale_order_id) || null
   if (!legacySo && int(u.dtl_soid)) { legacySo = int(u.dtl_soid); soidFallbacks++ }
-  const sizeName = sizeXwalk.get(int(u.size_id)) ?? null
+  const typeName = typeXwalk.get(int(u.type_inv_id)) ?? sizeXwalk.get(int(u.size_id)) ?? null
   return {
     legacy_bwt_id: int(u.bwt_id),
     unit_number: u.unit_num || null, alt_unit_number: u.alt_unit_num || null,
     vin: cleanVin(u.vin),
-    equipment_type_id: sizeName ? equipIdByName(sizeName) : null,
+    equipment_type_id: typeName ? equipIdByName(typeName) : null,
     make_id: makeIdForRom(int(u.make_id)),
     model_year: int(u.trailer_year) || null,
     status_id: statusIdByName(STATUS_MAP[readyState] ?? 'Purchased Not Ready'),
@@ -208,6 +212,16 @@ const unitRows = stUnits.map((u) => {
     gross_wt: num(u.gross), tare_wt: num(u.tare), net_wt: num(u.net),
     confirmed_gross: num(u.confirmed_gross), confirmed_tare: num(u.confirmed_tare),
     confirmed_net: num(u.confirmed_net),
+    // ROM grid-parity fields (Field Mapping §3 + Jason's grid screenshots)
+    purchase_location: u.purch_contact_name || null,
+    purchase_location_address: u.purch_contact_address || null,
+    sale_location: u.sold_contact_name || null,
+    sale_cust_ref: u.sale_cust_ref || null,
+    deliver_wt_ref: u.deliver_wt_ref || null,
+    purch_ticket_ref: int(u.purch_ticket_id) ? String(u.purch_ticket_id) : null,
+    sales_ticket_ref: int(u.sales_ticket_id) ? String(u.sales_ticket_id) : null,
+    wt_um: u.wt_um || null,
+    material_type: u.material_type || null,
     voided: u.void === '1',
   }
 }).filter((u) => u.legacy_bwt_id != null)

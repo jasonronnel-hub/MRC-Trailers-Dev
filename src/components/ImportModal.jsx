@@ -1,41 +1,47 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import Modal from './Modal'
 import { parseBidSheet } from '../lib/bidsheet'
 import { supabase } from '../lib/supabase'
 
-// Two-step import: paste → parse & preview (with duplicate detection against
-// existing inventory) → insert only the checked rows. Imported units land as
-// Purchased Not Ready with the chosen source and equipment type.
-export default function ImportModal({ parties, equipTypes, units, close, onSaved }) {
+// Two-step import: paste → parse & preview (duplicate detection runs
+// against the DATABASE — the browser never holds the full inventory) →
+// insert only the checked rows. Imported units land as Purchased Not Ready.
+export default function ImportModal({ parties, equipTypes, close, onSaved }) {
   const suppliers = parties.filter((p) => p.group?.name === 'Trailer Supplier')
   const [paste, setPaste] = useState('')
   const [parsed, setParsed] = useState(null)          // null until Parse clicked
+  const [existing, setExisting] = useState({ vins: new Set(), nums: new Set() })
   const [selected, setSelected] = useState(new Set())
   const [sourceId, setSourceId] = useState(suppliers.find((s) => s.name === 'Walmart')?.id ?? '')
   const [equipId, setEquipId] = useState(equipTypes.find((t) => t.name === 'Long Straight Rail')?.id ?? '')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const existing = useMemo(() => {
-    const vins = new Set(), nums = new Set()
-    for (const u of units) {
-      if (u.vin) vins.add(u.vin.toLowerCase())
-      if (u.unit_number) nums.add(u.unit_number.toLowerCase())
-    }
-    return { vins, nums }
-  }, [units])
+  const isDupe = (row, ex = existing) =>
+    (row.vin && ex.vins.has(row.vin.toLowerCase())) ||
+    (row.unit_number && ex.nums.has(row.unit_number.toLowerCase()))
 
-  const isDupe = (row) =>
-    (row.vin && existing.vins.has(row.vin.toLowerCase())) ||
-    (row.unit_number && existing.nums.has(row.unit_number.toLowerCase()))
-
-  const runParse = () => {
-    setErr('')
+  const runParse = async () => {
+    setErr(''); setBusy(true)
     const { units: rows, error } = parseBidSheet(paste)
-    if (error) { setErr(error); setParsed(null); return }
-    setParsed(rows)
-    // Pre-check everything that isn't already in the system.
-    setSelected(new Set(rows.map((_, i) => i).filter((i) => !isDupe(rows[i]))))
+    if (error) { setErr(error); setParsed(null); setBusy(false); return }
+    try {
+      // Server-side dupe check: only the pasted identifiers are queried.
+      const vinList = rows.map((r) => r.vin).filter(Boolean)
+      const numList = rows.map((r) => r.unit_number).filter(Boolean)
+      const [byVin, byNum] = await Promise.all([
+        vinList.length ? supabase.from('units').select('vin').in('vin', vinList) : { data: [] },
+        numList.length ? supabase.from('units').select('unit_number').in('unit_number', numList) : { data: [] },
+      ])
+      const ex = {
+        vins: new Set((byVin.data || []).map((u) => u.vin?.toLowerCase()).filter(Boolean)),
+        nums: new Set((byNum.data || []).map((u) => u.unit_number?.toLowerCase()).filter(Boolean)),
+      }
+      setExisting(ex)
+      setParsed(rows)
+      setSelected(new Set(rows.map((_, i) => i).filter((i) => !isDupe(rows[i], ex))))
+    } catch (ex2) { setErr(ex2.message) }
+    setBusy(false)
   }
 
   const toggle = (i) => {
@@ -89,7 +95,7 @@ export default function ImportModal({ parties, equipTypes, units, close, onSaved
           />
           <div className="form-actions">
             <button className="btn ghost" onClick={close}>Cancel</button>
-            <button className="btn" disabled={!paste.trim()} onClick={runParse}>Parse &amp; preview</button>
+            <button className="btn" disabled={!paste.trim() || busy} onClick={runParse}>{busy ? "Checking…" : "Parse & preview"}</button>
           </div>
         </>
       ) : (

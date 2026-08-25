@@ -1,21 +1,28 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Modal from './Modal'
 import Pill from './Pill'
 import DispatchForm from './DispatchForm'
 import PrintDoc from './PrintDoc'
 import EmailModal from './EmailModal'
-import { can, assignUnitsToDispatch, markUnitsDelivered } from '../lib/api'
+import { can, assignUnitsToDispatch, markUnitsDelivered, fetchDispatchUnits, fetchUnitsPage } from '../lib/api'
 import { dispatchOrderEmail, releaseEmail, deliveryNoticeEmail } from '../lib/emailTemplates'
 
 // Phase 3 strawman screen — the whole workflow is a first draft for Kim.
+// Unit lists are lazy-loaded per dispatch (scale pattern).
 export default function Dispatch({ data, role, refresh }) {
-  const { dispatches, units, parties, statuses } = data
+  const { dispatches, parties, statuses } = data
   const [drawerD, setDrawerD] = useState(null)
+  const [drawerUnits, setDrawerUnits] = useState(null)
   const [formD, setFormD] = useState(null)       // null | 'new' | dispatch
   const [assignD, setAssignD] = useState(null)
   const [printDoc, setPrintDoc] = useState(null) // { kind, dispatch }
   const [email, setEmail] = useState(null)       // { title, draft }
   const [err, setErr] = useState('')
+
+  useEffect(() => {
+    if (!drawerD) { setDrawerUnits(null); return }
+    fetchDispatchUnits(drawerD.id).then(setDrawerUnits).catch(() => setDrawerUnits([]))
+  }, [drawerD])
 
   const writable = can(role, 'editDispatch')
   const saved = () => { setFormD(null); setAssignD(null); setDrawerD(null); refresh() }
@@ -30,12 +37,10 @@ export default function Dispatch({ data, role, refresh }) {
   }
 
   const openEmail = (kind, d) => {
-    const dUnits = d.units || []
+    const dUnits = drawerUnits || []
     if (kind === 'order') setEmail({ title: `Email 1 · Dispatch order → ${d.hauler?.name || 'hauler'}`, draft: dispatchOrderEmail(d, dUnits) })
     if (kind === 'release') {
-      // source fleet best-effort: the source party of the first unit
-      const first = units.find((u) => u.dispatch?.id === d.id)
-      const source = parties.find((p) => p.id === first?.source?.id)
+      const source = parties.find((p) => p.id === dUnits[0]?.source?.id)
       setEmail({ title: `Email 2 · Release → ${source?.name || 'source fleet'}`, draft: releaseEmail(d, dUnits, source) })
     }
     if (kind === 'notice') setEmail({ title: `Email 3 · Delivery notice → ${d.destination?.name || 'buyer'}`, draft: deliveryNoticeEmail(d, dUnits) })
@@ -73,7 +78,7 @@ export default function Dispatch({ data, role, refresh }) {
                   <td className="muted">{d.pickup_location || '—'}</td>
                   <td>{d.destination?.name || '—'}</td>
                   <td className="mono muted">{d.scheduled_pickup || '—'}</td>
-                  <td>{d.units?.length ?? 0}</td>
+                  <td>{d.units?.[0]?.count ?? 0}</td>
                   <td className="muted">{d.rate != null ? `$${Number(d.rate).toLocaleString()}${d.rate_basis === 'per_unit' ? '/unit' : d.rate_basis === 'per_mile' ? '/mi' : ''}` : '—'}</td>
                 </tr>
               ))}
@@ -112,19 +117,21 @@ export default function Dispatch({ data, role, refresh }) {
               {drawerD.notes && <div className="banner"><b>Notes:</b> {drawerD.notes}</div>}
 
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-                <button className="btn ghost sm" onClick={() => setPrintDoc({ kind: 'order', dispatch: drawerD })}>Dispatch order (print)</button>
-                <button className="btn ghost sm" onClick={() => setPrintDoc({ kind: 'release', dispatch: drawerD })}>Release (print)</button>
-                <button className="btn ghost sm" onClick={() => openEmail('order', drawerD)}>Email 1 · hauler</button>
-                <button className="btn ghost sm" onClick={() => openEmail('release', drawerD)}>Email 2 · release</button>
-                <button className="btn ghost sm" onClick={() => openEmail('notice', drawerD)}>Email 3 · buyer</button>
+                <button className="btn ghost sm" disabled={!drawerUnits} onClick={() => setPrintDoc({ kind: 'order', dispatch: drawerD })}>Dispatch order (print)</button>
+                <button className="btn ghost sm" disabled={!drawerUnits} onClick={() => setPrintDoc({ kind: 'release', dispatch: drawerD })}>Release (print)</button>
+                <button className="btn ghost sm" disabled={!drawerUnits} onClick={() => openEmail('order', drawerD)}>Email 1 · hauler</button>
+                <button className="btn ghost sm" disabled={!drawerUnits} onClick={() => openEmail('release', drawerD)}>Email 2 · release</button>
+                <button className="btn ghost sm" disabled={!drawerUnits} onClick={() => openEmail('notice', drawerD)}>Email 3 · buyer</button>
               </div>
 
-              <b>Units ({drawerD.units?.length ?? 0})</b>
-              {drawerD.units?.length ? (
+              <b>Units{drawerUnits ? ` (${drawerUnits.length})` : ''}</b>
+              {drawerUnits === null ? (
+                <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>Loading…</div>
+              ) : drawerUnits.length ? (
                 <div className="tablewrap" style={{ marginTop: 8 }}>
                   <table>
                     <tbody>
-                      {drawerD.units.map((u) => (
+                      {drawerUnits.map((u) => (
                         <tr key={u.id} style={{ cursor: 'default' }}>
                           <td><span className="ticket">W{u.legacy_bwt_id ?? u.id}</span></td>
                           <td>{u.unit_number || '—'}</td>
@@ -142,9 +149,9 @@ export default function Dispatch({ data, role, refresh }) {
               ) : (
                 <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>None assigned yet.</div>
               )}
-              {writable && (drawerD.units || []).some((u) => u.status?.name === 'Dispatched — Delivery Required') && (
+              {writable && (drawerUnits || []).some((u) => u.status?.name === 'Dispatched — Delivery Required') && (
                 <div style={{ marginTop: 10 }}>
-                  <button className="btn sm" onClick={() => deliver(drawerD.units.filter((u) => u.status?.name === 'Dispatched — Delivery Required').map((u) => u.id))}>
+                  <button className="btn sm" onClick={() => deliver(drawerUnits.filter((u) => u.status?.name === 'Dispatched — Delivery Required').map((u) => u.id))}>
                     Mark ALL delivered
                   </button>
                 </div>
@@ -159,41 +166,61 @@ export default function Dispatch({ data, role, refresh }) {
           parties={parties} close={() => setFormD(null)} onSaved={saved} />
       )}
       {assignD && (
-        <AssignUnitsModal dispatch={assignD} units={units} close={() => setAssignD(null)} onSaved={saved} />
+        <AssignUnitsModal dispatch={assignD} statuses={statuses} close={() => setAssignD(null)} onSaved={saved} />
       )}
       {printDoc && (
         <PrintDoc kind={printDoc.kind} dispatch={printDoc.dispatch}
-          units={printDoc.dispatch.units || []} close={() => setPrintDoc(null)} />
+          units={drawerUnits || []} close={() => setPrintDoc(null)} />
       )}
       {email && <EmailModal draft={email.draft} title={email.title} close={() => setEmail(null)} />}
     </div>
   )
 }
 
-// Assign Sold — Dispatch Required units to this dispatch. Explicit checkbox
-// list only (same rule as attach-to-SO — never "the current view").
-function AssignUnitsModal({ dispatch, units, close, onSaved }) {
-  const [selected, setSelected] = useState(new Set())
+// Assign Sold — Dispatch Required units. Server-backed candidate search,
+// explicit checkboxes only, selection survives searches (Spec §2.6 rule).
+function AssignUnitsModal({ dispatch, statuses, close, onSaved }) {
+  const [q, setQ] = useState('')
   const [soldOnly, setSoldOnly] = useState(true)
+  const [candidates, setCandidates] = useState(null)
+  const [selected, setSelected] = useState(new Map())
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const eligible = useMemo(() => {
-    let list = units.filter((u) => !u.dispatch?.id)
-    if (soldOnly) list = list.filter((u) => u.status?.name === 'Sold — Dispatch Required')
-    return list
-  }, [units, soldOnly])
+  const soldId = statuses.find((s) => s.name === 'Sold — Dispatch Required')?.id
+  const closedId = statuses.find((s) => s.name === 'Invoiced — Closed')?.id
 
-  const toggle = (id) => {
-    const next = new Set(selected)
-    next.has(id) ? next.delete(id) : next.add(id)
+  const timer = useRef(null)
+  useEffect(() => {
+    clearTimeout(timer.current)
+    timer.current = setTimeout(async () => {
+      try {
+        const { rows } = await fetchUnitsPage({
+          filters: {
+            unattachedDispatch: true,
+            q,
+            ...(soldOnly
+              ? { statusIds: soldId ? [soldId] : [] }
+              : { notStatusIds: closedId ? [closedId] : [] }),
+          },
+          pageSize: 200,
+        })
+        setCandidates(rows)
+      } catch (e) { setErr(e.message) }
+    }, 250)
+    return () => clearTimeout(timer.current)
+  }, [q, soldOnly, soldId, closedId])
+
+  const toggle = (u) => {
+    const next = new Map(selected)
+    next.has(u.id) ? next.delete(u.id) : next.set(u.id, u)
     setSelected(next)
   }
 
   const submit = async () => {
     setBusy(true); setErr('')
     try {
-      await assignUnitsToDispatch(dispatch.id, [...selected])
+      await assignUnitsToDispatch(dispatch.id, [...selected.keys()])
       onSaved()
     } catch (ex) { setErr(ex.message); setBusy(false) }
   }
@@ -205,15 +232,26 @@ function AssignUnitsModal({ dispatch, units, close, onSaved }) {
         hauler, and get today as their dispatch date. All of it is audit-logged.
       </p>
       {err && <div className="auth-err">{err}</div>}
-      <label className="checkline" style={{ marginBottom: 8 }}>
-        <input type="checkbox" checked={soldOnly} onChange={(e) => setSoldOnly(e.target.checked)} />
-        Sold — Dispatch Required only
-      </label>
-      {eligible.length ? (
+      <div className="filters" style={{ marginBottom: 10 }}>
+        <input className="search" placeholder="Search unit #, VIN, location…"
+          value={q} onChange={(e) => setQ(e.target.value)} />
+        <label className="checkline" style={{ padding: 0 }}>
+          <input type="checkbox" checked={soldOnly} onChange={(e) => setSoldOnly(e.target.checked)} />
+          Sold — Dispatch Required only
+        </label>
+      </div>
+      {selected.size > 0 && (
+        <div className="banner" style={{ marginBottom: 8 }}>
+          <b>{selected.size} selected:</b> {[...selected.values()].map((u) => u.unit_number || `W${u.legacy_bwt_id ?? u.id}`).join(', ')}
+        </div>
+      )}
+      {candidates === null ? (
+        <div className="muted" style={{ fontSize: 13 }}>Loading…</div>
+      ) : candidates.length ? (
         <div className="attach-list">
-          {eligible.map((u) => (
+          {candidates.map((u) => (
             <label key={u.id} className="attach-row">
-              <input type="checkbox" checked={selected.has(u.id)} onChange={() => toggle(u.id)} />
+              <input type="checkbox" checked={selected.has(u.id)} onChange={() => toggle(u)} />
               <span className="ticket">W{u.legacy_bwt_id ?? u.id}</span>
               <b>{u.unit_number || '—'}</b>
               <span className="muted">{u.equipment_type?.name}</span>
@@ -222,6 +260,9 @@ function AssignUnitsModal({ dispatch, units, close, onSaved }) {
               <Pill status={u.status?.name} />
             </label>
           ))}
+          {candidates.length === 200 && (
+            <div className="muted" style={{ fontSize: 12, padding: '6px 8px' }}>Showing first 200 — narrow with search.</div>
+          )}
         </div>
       ) : (
         <div className="empty" style={{ padding: 24 }}>No unassigned units match.</div>

@@ -61,15 +61,43 @@ export default function UnitDrawer({ unit, statuses, role, close, onEdit }) {
               {unit.title_received && <span className="tag" style={{ marginLeft: 6 }}>received</span>}
             </dd>
             <dt>Location</dt><dd>{unit.physical_location || '—'}</dd>
-            <dt>Pickup code</dt><dd className="mono">{unit.pickup_location_code || '—'}</dd>
-            <dt>Pickup address</dt><dd>{unit.pickup_address || '—'}</dd>
-            <dt>Sold to</dt><dd>{unit.sold_to?.name || '—'}</dd>
+            <dt>Purchase location</dt>
+            <dd>
+              {unit.purchase_location || unit.pickup_location_code || '—'}
+              {(unit.purchase_location_address || unit.pickup_address) && (
+                <><br /><span className="muted">{unit.purchase_location_address || unit.pickup_address}</span></>
+              )}
+            </dd>
+            <dt>Sold to</dt>
+            <dd>
+              {unit.sold_to?.name || '—'}
+              {unit.sale_location && <span className="muted"> · yard: {unit.sale_location}</span>}
+            </dd>
+            <dt>Sale ref</dt><dd><span className="tag">{unit.sale_cust_ref || unit.sales_order?.customer_reference || '—'}</span></dd>
             <dt>Sales order</dt>
             <dd className="mono">
               {unit.sales_order?.order_number || '—'}
               {unit.sales_order?.customer_reference && <span className="muted"> · {unit.sales_order.customer_reference}</span>}
             </dd>
             <dt>Dispatch</dt><dd className="mono">{unit.dispatch?.dispatch_number || '—'}</dd>
+            {(unit.net_wt != null || unit.confirmed_net != null) && (<>
+              <dt>Weights</dt>
+              <dd>
+                {unit.net_wt != null && <>net {fmt(unit.net_wt)}{unit.wt_um ? ` ${unit.wt_um}` : ''}</>}
+                {unit.confirmed_net != null && <span className="muted"> · confirmed {fmt(unit.confirmed_net)}</span>}
+              </dd>
+            </>)}
+            {(unit.deliver_wt_ref || unit.purch_ticket_ref || unit.sales_ticket_ref) && (<>
+              <dt>ROM ticket refs</dt>
+              <dd className="mono" style={{ fontSize: 12 }}>
+                {[
+                  unit.deliver_wt_ref && `deliv ${unit.deliver_wt_ref}`,
+                  unit.purch_ticket_ref && `purch ${unit.purch_ticket_ref}`,
+                  unit.sales_ticket_ref && `sale ${unit.sales_ticket_ref}`,
+                ].filter(Boolean).join(' · ')}
+              </dd>
+            </>)}
+            {unit.material_type && (<><dt>Material</dt><dd>{unit.material_type}</dd></>)}
           </dl>
           {unit.condition_comments && (
             <div className="banner"><b>Condition:</b> {unit.condition_comments}</div>

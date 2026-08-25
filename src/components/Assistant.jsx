@@ -11,7 +11,7 @@ const EXAMPLES = [
   'How many units are Ready — Sales Required right now?',
 ]
 
-export default function Assistant({ data, role, refresh }) {
+export default function Assistant({ data, counts, role, refresh }) {
   const [log, setLog] = useState([{
     role: 'bot',
     text: "Hey — I'm your ops assistant. Ask me to create a buyer, build a sales order, attach units, move units through the pipeline, or answer a question about what's in the system. Forms are always there as a fallback if I mishear you.",
@@ -30,7 +30,7 @@ export default function Assistant({ data, role, refresh }) {
     setLog(next)
     setBusy(true)
     try {
-      const snapshot = buildSnapshot(data)
+      const snapshot = buildSnapshot(data, counts)
       const { reply, actions } = await callAssistant(t, snapshot)
       let did = []
       if (actions?.length) {

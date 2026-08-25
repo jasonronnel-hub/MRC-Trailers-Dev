@@ -7,11 +7,13 @@ import {
   can, saveParty, saveOrder, nextOrderNumber, addUnits,
   attachUnits, setUnitsStatus, addNote,
   saveDispatch, nextDispatchNumber, assignUnitsToDispatch, markUnitsDelivered,
+  fetchActiveUnits,
 } from './api'
 
 // Compact snapshot sent to the edge function — enough for the model to match
 // buyers/orders by name and answer count questions, not a full data dump.
-export function buildSnapshot(data) {
+// counts = the RPC-backed status_id → n map the shell already holds.
+export function buildSnapshot(data, counts) {
   const buyers = data.parties
     .filter((p) => p.group?.name === 'Trailer Buyer')
     .map((p) => ({
@@ -25,15 +27,18 @@ export function buildSnapshot(data) {
       customer_reference: o.customer_reference, item_code: o.item_code,
     }))
   const statusCounts = {}
-  for (const s of data.statuses) statusCounts[s.name] = 0
-  for (const u of data.units) if (u.status) statusCounts[u.status.name] = (statusCounts[u.status.name] || 0) + 1
+  let unitCount = 0
+  for (const s of data.statuses) {
+    statusCounts[s.name] = counts?.[s.id] ?? 0
+    unitCount += counts?.[s.id] ?? 0
+  }
   const haulers = data.parties
     .filter((p) => ['Freight', 'Rail Freight'].includes(p.group?.name))
     .map((p) => ({ id: p.id, name: p.name }))
   const dispatches = (data.dispatches || [])
     .filter((d) => !d.cancelled)
     .map((d) => ({ dispatch_number: d.dispatch_number, hauler_name: d.hauler?.name, destination_name: d.destination?.name }))
-  return { buyers, orders, statusCounts, unitCount: data.units.length, haulers, dispatches }
+  return { buyers, orders, statusCounts, unitCount, haulers, dispatches }
 }
 
 function resolveBuyer(parties, ref) {
@@ -72,7 +77,13 @@ function selectUnits(units, sel) {
 // throws only on unexpected DB errors (permission denials are logged, not thrown).
 export async function applyActions(data, actions, role) {
   const log = []
-  const { parties, orders, units, statuses, equipTypes } = data
+  const { parties, orders, statuses, equipTypes } = data
+  // Unit selectors operate over the ACTIVE pipeline (fetched fresh, bounded
+  // by how the business runs) — the assistant never needs closed history.
+  const needsUnits = (actions || []).some((a) =>
+    ['attach_units', 'set_status', 'assign_dispatch', 'mark_delivered'].includes(a.type) ||
+    (a.type === 'add_note' && !(a.buyer || a.buyerName)))
+  const units = needsUnits ? await fetchActiveUnits(statuses) : []
   const statusId = (name) => statuses.find((s) => s.name === name)?.id
   const equip = (name) => equipTypes.find((t) => t.name.toLowerCase() === String(name || '').toLowerCase())
 

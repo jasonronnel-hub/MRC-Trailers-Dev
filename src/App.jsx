@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase, signOut } from './lib/supabase'
-import { fetchAll, fetchMyRole } from './lib/api'
+import { fetchAll, fetchMyRole, fetchStatusCounts } from './lib/api'
 import { SignIn, MfaVerify, MfaEnroll, NoRole } from './components/Login'
 import Logo from './components/Logo'
 import PipelineRail from './components/PipelineRail'
@@ -61,12 +61,16 @@ export default function App() {
 
 function Shell({ role, email }) {
   const [data, setData] = useState(null)
+  const [counts, setCounts] = useState({})
+  const [refreshKey, setRefreshKey] = useState(0)
   const [err, setErr] = useState('')
   const [tab, setTab] = useState('inventory')
   const [statusFilter, setStatusFilter] = useState(null)
 
   const refresh = useCallback(
-    () => fetchAll().then(setData).catch((e) => setErr(e.message)),
+    () => Promise.all([fetchAll(), fetchStatusCounts()])
+      .then(([d, c]) => { setData(d); setCounts(c); setRefreshKey((k) => k + 1) })
+      .catch((e) => setErr(e.message)),
     [],
   )
   useEffect(() => { refresh() }, [refresh])
@@ -74,15 +78,16 @@ function Shell({ role, email }) {
   if (err) return <div className="auth-wrap"><div className="auth-err">Couldn’t load data: {err}</div></div>
   if (!data) return <div className="auth-wrap"><span className="muted">Loading…</span></div>
 
-  const { statuses, units, parties, orders } = data
+  const { statuses, parties, orders } = data
   const buyerCount = parties.filter((p) => p.group?.name === 'Trailer Buyer').length
-  const screenProps = { data, role, refresh }
+  const totalUnits = Object.values(counts).reduce((a, b) => a + b, 0)
+  const screenProps = { data, counts, role, refresh, refreshKey }
 
   return (
     <>
       <div className="topbar">
         <div className="brand"><Logo /></div>
-        <PipelineRail statuses={statuses} units={units}
+        <PipelineRail statuses={statuses} counts={counts}
           statusFilter={statusFilter}
           setStatusFilter={(s) => { setTab('inventory'); setStatusFilter(s) }} />
         <div className="userchip">
@@ -95,7 +100,7 @@ function Shell({ role, email }) {
       <div className="body">
         <div className="nav">
           {[
-            ['inventory', 'Inventory', units.length],
+            ['inventory', 'Inventory', totalUnits],
             ['buyers', 'Buyers', buyerCount],
             ['orders', 'Sales Orders', orders.length],
             ['dispatch', 'Dispatch', data.dispatches.length || null],
@@ -111,7 +116,7 @@ function Shell({ role, email }) {
 
         <div className="main">
           {tab === 'inventory' && (
-            <Inventory {...screenProps} statusFilter={statusFilter} setStatusFilter={setStatusFilter} />
+            <Inventory key={refreshKey} {...screenProps} statusFilter={statusFilter} setStatusFilter={setStatusFilter} />
           )}
           {tab === 'buyers' && <Buyers {...screenProps} />}
           {tab === 'orders' && <Orders {...screenProps} />}

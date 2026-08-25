@@ -29,6 +29,10 @@ const FILES = {
     'hauler_id', 'dispatch_id', 'ticket_notes',
     'gross', 'tare', 'net', 'adj_wt', 'adj_reason',
     'confirmed_gross', 'confirmed_tare', 'confirmed_net', 'dtl_soid',
+    'type_inv_id', 'type_item_name', 'material_type',
+    'purch_contact_name', 'purch_contact_address', 'sold_contact_name',
+    'deliver_to_id', 'deliver_wt_ref',
+    'po_id', 'purch_ticket_id', 'sales_ticket_id', 'wt_um',
   ]],
   'dealers.psv': ['staging_dealers', [
     'dealer_id', 'company_name', 'group_id', 'billing_address', 'city', 'state', 'zip',

@@ -1,14 +1,21 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Logo from './Logo'
+import { fetchActiveUnits } from '../lib/api'
 
 // Tuesday Report (Phase 3 strawman). Section choice is a first draft of
 // "what the division needs to see weekly" — Kim decides the real content.
-// Renders on screen, prints, and copies as plain text for pasting into email.
-export default function TuesdayReport({ data }) {
-  const { units, dispatches } = data
+// Fetches only the ACTIVE pipeline (closed history excluded), so it stays
+// fast even with 23k+ migrated units. Renders, prints, copies as text.
+export default function TuesdayReport({ data, counts }) {
+  const { dispatches, statuses } = data
+  const [units, setUnits] = useState(null)
   const [copied, setCopied] = useState(false)
 
-  const byStatus = (name) => units.filter((u) => u.status?.name === name)
+  useEffect(() => {
+    fetchActiveUnits(statuses).then(setUnits).catch(() => setUnits([]))
+  }, [statuses])
+
+  const byStatus = (name) => (units || []).filter((u) => u.status?.name === name)
 
   const sections = useMemo(() => {
     const ready = byStatus('Ready — Sales Required')
@@ -39,10 +46,17 @@ export default function TuesdayReport({ data }) {
       soldByBuyer: groupBy(sold, (u) => u.sold_to?.name),
       dispatched,
       delivered,
-      openDispatches: dispatches.filter((d) => !d.cancelled &&
-        (d.units || []).some((u) => u.status?.name === 'Dispatched — Delivery Required')),
     }
   }, [units, dispatches])
+
+  if (units === null) {
+    return (
+      <div>
+        <div className="pagehead"><h2>Tuesday Report</h2><span className="sub">building the snapshot…</span></div>
+        <div className="empty">Loading active pipeline…</div>
+      </div>
+    )
+  }
 
   const unitLabel = (u) => u.unit_number || `W${u.legacy_bwt_id ?? u.id}`
 
