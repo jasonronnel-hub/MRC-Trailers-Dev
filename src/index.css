@@ -321,6 +321,17 @@ tbody tr:hover td { background: var(--panel); cursor: pointer; }
 }
 .prompts button:hover { background: var(--panel); }
 
+/* ---------- print (dispatch order / release / Tuesday Report) ---------- */
+@media print {
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area {
+    position: absolute; inset: 0; width: 100%;
+    padding: 24px; background: #fff;
+  }
+  .no-print { display: none !important; }
+}
+
 @media (max-width: 820px) {
   .brand { min-width: 150px; }
   .nav { width: 56px; min-width: 56px; }
