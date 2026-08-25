@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import Pill from './Pill'
 import { formatPrice, fetchOrderUnits } from '../lib/api'
+import { useNotes, PopupBanners, NotesList } from './Notes'
 
-export default function OrderDrawer({ order: o, close, onEdit, onAttach }) {
+export default function OrderDrawer({ order: o, role, close, onEdit, onAttach }) {
   const [units, setUnits] = useState(null)   // lazy-loaded, null = loading
+  const notesState = useNotes('sales_order', o.id)
   useEffect(() => {
     fetchOrderUnits(o.id).then(setUnits).catch(() => setUnits([]))
   }, [o.id])
@@ -23,6 +25,7 @@ export default function OrderDrawer({ order: o, close, onEdit, onAttach }) {
           </div>
         </div>
         <div className="dbody">
+          <PopupBanners popups={notesState.popups} />
           <dl className="kv">
             <dt>Buyer</dt><dd>{o.buyer?.name || '—'}</dd>
             <dt>Customer ref</dt><dd><span className="tag">{o.customer_reference || '—'}</span></dd>
@@ -56,6 +59,8 @@ export default function OrderDrawer({ order: o, close, onEdit, onAttach }) {
           ) : (
             <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>None attached yet.</div>
           )}
+
+          <NotesList entityType="sales_order" entityId={o.id} notesState={notesState} role={role} />
         </div>
       </div>
     </div>

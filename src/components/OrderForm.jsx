@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Modal from './Modal'
+import SearchSelect from './SearchSelect'
 import { saveOrder, nextOrderNumber } from '../lib/api'
 
 // Customer reference must follow the 'AUG 26' convention (Spec §2.4: enforce
@@ -64,14 +65,13 @@ export default function OrderForm({ order, orders, parties, equipTypes, close, o
         <div className="form-grid">
           <div className="field full">
             <label>Buyer *</label>
-            <select value={f.buyer_party_id} onChange={set('buyer_party_id')} required autoFocus>
-              <option value="">Select a buyer…</option>
-              {buyers.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}{!b.destruction_agreement_signed ? ' — ⚠ no destruction agmt' : ''}
-                </option>
-              ))}
-            </select>
+            <SearchSelect autoFocus placeholder="Type to find a buyer…" style={{ width: '100%' }}
+              options={buyers.map((b) => ({
+                id: b.id,
+                label: `${b.name}${!b.destruction_agreement_signed ? ' — ⚠ no destruction agmt' : ''}`,
+              }))}
+              value={f.buyer_party_id}
+              onChange={(v) => setF({ ...f, buyer_party_id: v })} />
           </div>
           <div className="field">
             <label>Customer reference</label>

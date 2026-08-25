@@ -294,9 +294,14 @@ die('wipe legacy notes', (await db.from('notes').delete().not('legacy_note_id', 
 let unmappedNotes = 0
 const noteRows = stNotes.flatMap((n) => {
   let entity_type = null, entity_id = null
-  if (n.p_obj_id === '915' && n.p_obj_type_id === '8' && unitByBwt.has(int(n.p_trans_id))) {
+  // Order check FIRST: order notes carry a DealerID too, and would otherwise
+  // fall through to the party bucket. pObjID 937 = OrderHeader (empirically
+  // verified: correlates with both order legs' customers; 936 does not).
+  if (n.p_obj_id === '937' && n.p_obj_type_id === '8' && so.has(int(n.p_trans_id))) {
+    entity_type = 'sales_order'; entity_id = so.get(int(n.p_trans_id))
+  } else if (n.p_obj_id === '915' && n.p_obj_type_id === '8' && unitByBwt.has(int(n.p_trans_id))) {
     entity_type = 'unit'; entity_id = unitByBwt.get(int(n.p_trans_id))
-  } else if (party.has(int(n.dealer_id))) {
+  } else if (n.p_obj_id !== '937' && party.has(int(n.dealer_id))) {
     entity_type = 'party'; entity_id = party.get(int(n.dealer_id))
   } else {
     unmappedNotes++; return []

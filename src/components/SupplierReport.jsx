@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Logo from './Logo'
 import EmailModal from './EmailModal'
+import SearchSelect from './SearchSelect'
 import { fetchUnitsPage } from '../lib/api'
 import { supplierReportCover } from '../lib/emailTemplates'
 
@@ -117,9 +118,9 @@ export default function SupplierReport({ data }) {
   return (
     <div>
       <div className="filters no-print">
-        <select className="search" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-          {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
+        <SearchSelect placeholder="Type to find the supplier…" style={{ minWidth: 200 }}
+          options={suppliers.map((s) => ({ id: s.id, label: s.name }))}
+          value={supplierId} onChange={setSupplierId} />
         <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <button className="btn ghost sm" onClick={copy} disabled={!sections}>{copied ? 'Copied ✓' : 'Copy as text'}</button>
           <button className="btn ghost sm" onClick={exportCsv} disabled={!sections}>CSV</button>

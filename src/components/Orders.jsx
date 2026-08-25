@@ -73,7 +73,7 @@ export default function Orders({ data, role, refresh }) {
       )}
 
       {drawerOrder && (
-        <OrderDrawer order={drawerOrder} close={() => setDrawerOrder(null)}
+        <OrderDrawer order={drawerOrder} role={role} close={() => setDrawerOrder(null)}
           onEdit={can(role, 'editOrder') ? () => setFormOrder(drawerOrder) : null}
           onAttach={can(role, 'attachUnits') && drawerOrder.open ? () => setAttachOrder(drawerOrder) : null} />
       )}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Modal from './Modal'
+import SearchSelect from './SearchSelect'
 import { can, fetchSnapshots, fetchSnapshotCells, saveSnapshot } from '../lib/api'
 import { parseFleetMatrix, totalsByType } from '../lib/fleetMatrix'
 
@@ -189,9 +190,9 @@ function ImportSnapshotModal({ parties, close, onSaved }) {
           <div className="form-grid" style={{ marginBottom: 8 }}>
             <div className="field">
               <label>Supplier</label>
-              <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-                {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <SearchSelect placeholder="Type to find the supplier…" style={{ width: '100%' }}
+                options={suppliers.map((s) => ({ id: s.id, label: s.name }))}
+                value={supplierId} onChange={setSupplierId} />
             </div>
             <div className="field">
               <label>Report date</label>

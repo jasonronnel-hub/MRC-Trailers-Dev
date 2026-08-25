@@ -10,6 +10,7 @@ export function useNotes(entityType, entityId) {
   const [err, setErr] = useState('')
 
   const reload = useCallback(() => {
+    if (entityId == null) { setNotes(null); return }   // e.g. an inline drawer that isn't open
     fetchNotes(entityType, entityId).then(setNotes).catch((e) => setErr(e.message))
   }, [entityType, entityId])
   useEffect(() => { reload() }, [reload])

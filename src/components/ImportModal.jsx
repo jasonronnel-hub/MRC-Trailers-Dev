@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Modal from './Modal'
+import SearchSelect from './SearchSelect'
 import { parseBidSheet } from '../lib/bidsheet'
 import { supabase } from '../lib/supabase'
 
@@ -103,9 +104,9 @@ export default function ImportModal({ parties, equipTypes, close, onSaved }) {
           <div className="form-grid" style={{ marginBottom: 10 }}>
             <div className="field">
               <label>Source (fleet)</label>
-              <select value={sourceId} onChange={(e) => setSourceId(e.target.value)}>
-                {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <SearchSelect placeholder="Type to find the fleet…" style={{ width: '100%' }}
+                options={suppliers.map((s) => ({ id: s.id, label: s.name }))}
+                value={sourceId} onChange={setSourceId} />
             </div>
             <div className="field">
               <label>Equipment type (applied to all rows)</label>

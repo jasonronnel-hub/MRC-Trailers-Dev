@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Modal from './Modal'
+import SearchSelect from './SearchSelect'
 import { saveDispatch, nextDispatchNumber } from '../lib/api'
 
 const F = (v) => v ?? ''
@@ -53,10 +54,10 @@ export default function DispatchForm({ dispatch, dispatches, parties, close, onS
         <div className="form-grid">
           <div className="field">
             <label>Hauler</label>
-            <select value={f.hauler_party_id} onChange={set('hauler_party_id')} autoFocus>
-              <option value="">Select a hauler…</option>
-              {haulers.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-            </select>
+            <SearchSelect autoFocus placeholder="Type to find a hauler…" style={{ width: '100%' }}
+              options={haulers.map((h) => ({ id: h.id, label: h.name }))}
+              value={f.hauler_party_id}
+              onChange={(v) => setF({ ...f, hauler_party_id: v })} />
           </div>
           <div className="field">
             <label>Hauler contact (driver / dispatcher)</label>
@@ -72,10 +73,10 @@ export default function DispatchForm({ dispatch, dispatches, parties, close, onS
           </div>
           <div className="field">
             <label>Destination (buying yard)</label>
-            <select value={f.destination_party_id} onChange={set('destination_party_id')}>
-              <option value="">Select destination…</option>
-              {buyers.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </select>
+            <SearchSelect placeholder="Type to find the yard…" style={{ width: '100%' }}
+              options={buyers.map((b) => ({ id: b.id, label: b.name }))}
+              value={f.destination_party_id}
+              onChange={(v) => setF({ ...f, destination_party_id: v })} />
           </div>
           <div className="field">
             <label>Destination address</label>

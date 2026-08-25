@@ -3,6 +3,7 @@ import Pill from './Pill'
 import UnitDrawer from './UnitDrawer'
 import UnitForm from './UnitForm'
 import ImportModal from './ImportModal'
+import SearchSelect from './SearchSelect'
 import { statusMeta } from '../lib/statuses'
 import { can, fetchUnitsPage } from '../lib/api'
 
@@ -134,16 +135,12 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
       <div className="filters">
         <input className="search" placeholder="Search unit #, alt #, VIN, location…"
           value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className="search" style={{ minWidth: 130 }} value={sourceId}
-          onChange={(e) => { setSourceId(e.target.value); setPage(0) }}>
-          <option value="">Any source</option>
-          {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
-        <select className="search" style={{ minWidth: 130 }} value={buyerId}
-          onChange={(e) => { setBuyerId(e.target.value); setPage(0) }}>
-          <option value="">Any buyer</option>
-          {buyers.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
+        <SearchSelect options={suppliers.map((s) => ({ id: s.id, label: s.name }))}
+          value={sourceId} onChange={(v) => { setSourceId(v); setPage(0) }}
+          placeholder="Any source" style={{ minWidth: 150 }} />
+        <SearchSelect options={buyers.map((b) => ({ id: b.id, label: b.name }))}
+          value={buyerId} onChange={(v) => { setBuyerId(v); setPage(0) }}
+          placeholder="Any buyer" style={{ minWidth: 150 }} />
         <select className="search" style={{ minWidth: 130 }} value={equipTypeId}
           onChange={(e) => { setEquipTypeId(e.target.value); setPage(0) }}>
           <option value="">Any type</option>

@@ -6,6 +6,7 @@ import PrintDoc from './PrintDoc'
 import EmailModal from './EmailModal'
 import { can, assignUnitsToDispatch, markUnitsDelivered, fetchDispatchUnits, fetchUnitsPage } from '../lib/api'
 import { dispatchOrderEmail, releaseEmail, deliveryNoticeEmail } from '../lib/emailTemplates'
+import { useNotes, PopupBanners, NotesList } from './Notes'
 
 // Phase 3 strawman screen — the whole workflow is a first draft for Kim.
 // Unit lists are lazy-loaded per dispatch (scale pattern).
@@ -19,6 +20,7 @@ export default function Dispatch({ data, role, refresh }) {
   const [email, setEmail] = useState(null)       // { title, draft }
   const [err, setErr] = useState('')
 
+  const notesState = useNotes('dispatch', drawerD?.id)   // null-guarded while closed
   useEffect(() => {
     if (!drawerD) { setDrawerUnits(null); return }
     fetchDispatchUnits(drawerD.id).then(setDrawerUnits).catch(() => setDrawerUnits([]))
@@ -106,6 +108,7 @@ export default function Dispatch({ data, role, refresh }) {
               </div>
             </div>
             <div className="dbody">
+              <PopupBanners popups={notesState.popups} />
               <dl className="kv">
                 <dt>Hauler</dt><dd>{drawerD.hauler?.name || '—'}{drawerD.hauler_contact && <span className="muted"> — {drawerD.hauler_contact}</span>}</dd>
                 <dt>Pickup</dt><dd>{drawerD.pickup_location || '—'}{drawerD.pickup_address && <><br /><span className="muted">{drawerD.pickup_address}</span></>}</dd>
@@ -156,6 +159,8 @@ export default function Dispatch({ data, role, refresh }) {
                   </button>
                 </div>
               )}
+
+              <NotesList entityType="dispatch" entityId={drawerD.id} notesState={notesState} role={role} />
             </div>
           </div>
         </div>

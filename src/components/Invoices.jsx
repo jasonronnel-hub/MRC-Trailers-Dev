@@ -7,6 +7,7 @@ import {
   flagInvoiceDispute, resolveInvoiceDispute,
 } from '../lib/api'
 import { useNotes, PopupBanners, NotesList } from './Notes'
+import SearchSelect from './SearchSelect'
 
 const money = (n) => n == null ? '—' : `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
 
@@ -305,10 +306,10 @@ function InvoiceForm({ invoice, invoices, parties, close, onSaved }) {
         <div className="form-grid">
           <div className="field full">
             <label>Buyer *</label>
-            <select value={f.buyer_party_id} onChange={set('buyer_party_id')} required autoFocus>
-              <option value="">Select a buyer…</option>
-              {buyers.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </select>
+            <SearchSelect autoFocus placeholder="Type to find a buyer…" style={{ width: '100%' }}
+              options={buyers.map((b) => ({ id: b.id, label: b.name }))}
+              value={f.buyer_party_id}
+              onChange={(v) => setF({ ...f, buyer_party_id: v })} />
           </div>
           <div className="field">
             <label>Invoice date</label>

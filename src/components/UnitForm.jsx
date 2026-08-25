@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Modal from './Modal'
+import SearchSelect from './SearchSelect'
 import { saveUnit } from '../lib/api'
 
 const F = (v) => v ?? ''
@@ -101,10 +102,10 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
           </div>
           <div className="field">
             <label>Source (fleet)</label>
-            <select value={f.source_party_id} onChange={set('source_party_id')}>
-              <option value="">—</option>
-              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+            <SearchSelect placeholder="Type to find the fleet…" style={{ width: '100%' }}
+              options={suppliers.map((s) => ({ id: s.id, label: s.name }))}
+              value={f.source_party_id}
+              onChange={(v) => setF({ ...f, source_party_id: v })} />
           </div>
           <div className="field">
             <label>Status</label>

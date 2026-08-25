@@ -133,6 +133,9 @@ SELECT $(i n.romNoteID)$SEP$(i n.romNoteDetailID)$SEP$(i n.NoteTypeID)$SEP$(t nt
 FROM dbo.romNotes n
 LEFT JOIN dbo.romNoteTypes nt ON nt.NoteTypeID = n.NoteTypeID AND nt.CompanyID = n.CompanyID
 WHERE (n.pObjID = 915 AND n.pObjTypeID = 8 AND n.pTransID IN (SELECT BrokerWTID FROM scoped))
+   OR (n.pObjID = 937 AND n.pObjTypeID = 8 AND n.pTransID IN (
+        SELECT SaleOrderID FROM scoped WHERE SaleOrderID > 0
+        UNION SELECT PurchOrderID FROM scoped WHERE PurchOrderID > 0))
    OR (n.DealerID > 0 AND n.DealerID IN (
         SELECT DealerID FROM dbo.EntDealers WHERE DealerGroupID IN (13,14,18,21,22)
         UNION SELECT PurchDealerID FROM scoped UNION SELECT SaleDealerID FROM scoped UNION SELECT HaulerID FROM scoped))"
