@@ -59,6 +59,12 @@ export default function AttachUnitsModal({ order, statuses, close, onSaved }) {
         Buyer: <b>{order.buyer?.name}</b>. Attached units flip to
         <b> Sold — Dispatch Required</b> automatically and the change is audit-logged.
       </p>
+      {order.buyer && !order.buyer.destruction_agreement_signed && (
+        <div className="banner" style={{ background: 'var(--error-tint)', borderColor: 'rgba(179,64,47,0.35)', borderLeftColor: 'var(--error)' }}>
+          <b>⚑ {order.buyer.name} has NO destruction agreement on file.</b> Do not ship
+          FedEx/Walmart units until it’s signed. (Warning only — you can proceed; Jason’s call.)
+        </div>
+      )}
       {err && <div className="auth-err">{err}</div>}
       <div className="filters" style={{ marginBottom: 10 }}>
         <input className="search" placeholder="Search unit #, VIN, location…"

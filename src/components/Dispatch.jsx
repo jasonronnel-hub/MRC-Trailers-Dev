@@ -38,12 +38,12 @@ export default function Dispatch({ data, role, refresh }) {
 
   const openEmail = (kind, d) => {
     const dUnits = drawerUnits || []
-    if (kind === 'order') setEmail({ title: `Email 1 · Dispatch order → ${d.hauler?.name || 'hauler'}`, draft: dispatchOrderEmail(d, dUnits) })
+    if (kind === 'order') setEmail({ title: `Dispatch order → ${d.hauler?.name || 'hauler'} (unconfirmed draft)`, draft: dispatchOrderEmail(d, dUnits) })
     if (kind === 'release') {
       const source = parties.find((p) => p.id === dUnits[0]?.source?.id)
-      setEmail({ title: `Email 2 · Release → ${source?.name || 'source fleet'}`, draft: releaseEmail(d, dUnits, source) })
+      setEmail({ title: `Release → ${source?.name || 'source fleet'} (unconfirmed draft)`, draft: releaseEmail(d, dUnits, source) })
     }
-    if (kind === 'notice') setEmail({ title: `Email 3 · Delivery notice → ${d.destination?.name || 'buyer'}`, draft: deliveryNoticeEmail(d, dUnits) })
+    if (kind === 'notice') setEmail({ title: `Delivery notice → ${d.destination?.name || 'buyer'}`, draft: deliveryNoticeEmail(d, dUnits) })
   }
 
   return (
@@ -119,9 +119,9 @@ export default function Dispatch({ data, role, refresh }) {
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
                 <button className="btn ghost sm" disabled={!drawerUnits} onClick={() => setPrintDoc({ kind: 'order', dispatch: drawerD })}>Dispatch order (print)</button>
                 <button className="btn ghost sm" disabled={!drawerUnits} onClick={() => setPrintDoc({ kind: 'release', dispatch: drawerD })}>Release (print)</button>
-                <button className="btn ghost sm" disabled={!drawerUnits} onClick={() => openEmail('order', drawerD)}>Email 1 · hauler</button>
-                <button className="btn ghost sm" disabled={!drawerUnits} onClick={() => openEmail('release', drawerD)}>Email 2 · release</button>
-                <button className="btn ghost sm" disabled={!drawerUnits} onClick={() => openEmail('notice', drawerD)}>Email 3 · buyer</button>
+                <button className="btn ghost sm" disabled={!drawerUnits} onClick={() => openEmail('notice', drawerD)}>Email buyer (Kim’s format)</button>
+                <button className="btn ghost sm" disabled={!drawerUnits} onClick={() => openEmail('order', drawerD)}>Email hauler (draft — confirm w/ Kim)</button>
+                <button className="btn ghost sm" disabled={!drawerUnits} onClick={() => openEmail('release', drawerD)}>Email release (draft — confirm w/ Kim)</button>
               </div>
 
               <b>Units{drawerUnits ? ` (${drawerUnits.length})` : ''}</b>

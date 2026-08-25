@@ -41,7 +41,7 @@ export async function fetchAll() {
     supabase.from('sales_orders').select(`
       id, order_number, customer_reference, item_code, price, price_unit,
       ref_weight_lbs, header_notes, detail_notes, open, closed_at, created_at,
-      buyer:parties ( id, name ),
+      buyer:parties ( id, name, destruction_agreement_signed ),
       units ( count )
     `).order('id', { ascending: false }).limit(10000),
     supabase.from('party_groups').select('id, name').order('name'),

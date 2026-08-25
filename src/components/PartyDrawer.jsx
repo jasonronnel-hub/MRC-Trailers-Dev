@@ -1,9 +1,19 @@
 import { DEDUCTION_LABELS, formatPrice } from '../lib/api'
 import { useNotes, PopupBanners, NotesList } from './Notes'
 
-export default function PartyDrawer({ party: p, orders, role, close, onEdit }) {
+export default function PartyDrawer({ party: p, orders, dispatches = [], role, close, onEdit }) {
   const isBuyer = p.group?.name === 'Trailer Buyer'
+  const isHauler = ['Freight', 'Rail Freight'].includes(p.group?.name)
   const partyOrders = orders.filter((o) => o.buyer?.id === p.id)
+  // Kim picks haulers on affordability + reliability — surface both:
+  // rate history from past dispatches, and her notes right beside it.
+  const haulerDispatches = isHauler
+    ? dispatches.filter((d) => d.hauler?.id === p.id && !d.cancelled)
+    : []
+  const rates = haulerDispatches.filter((d) => d.rate != null)
+  const avgRate = rates.length
+    ? rates.reduce((s, d) => s + Number(d.rate), 0) / rates.length
+    : null
   const contacts = (p.contacts || []).filter((c) => c.active !== false)
   const notesState = useNotes('party', p.id)
 
@@ -76,6 +86,21 @@ export default function PartyDrawer({ party: p, orders, role, close, onEdit }) {
           {p.trucking_notes && (
             <div className="banner"><b>Kim’s trucking notes:</b> <span style={{ whiteSpace: 'pre-wrap' }}>{p.trucking_notes}</span></div>
           )}
+
+          {isHauler && (<>
+            <b>Dispatch history ({haulerDispatches.length})</b>
+            {avgRate != null && (
+              <div className="muted" style={{ fontSize: 12.5, margin: '2px 0 6px' }}>
+                Average rate ${avgRate.toLocaleString(undefined, { maximumFractionDigits: 0 })} across {rates.length} priced dispatch{rates.length === 1 ? '' : 'es'}
+              </div>
+            )}
+            {haulerDispatches.length ? haulerDispatches.slice(0, 8).map((d) => (
+              <div key={d.id} className="mono muted" style={{ fontSize: 12.5, padding: '3px 0' }}>
+                {d.dispatch_number} · {d.scheduled_pickup || 'unscheduled'} · {d.pickup_location || '?'} → {d.destination?.name || '?'}
+                {d.rate != null && ` · $${Number(d.rate).toLocaleString()}${d.rate_basis === 'per_unit' ? '/unit' : d.rate_basis === 'per_mile' ? '/mi' : ''}`}
+              </div>
+            )) : <div className="muted" style={{ fontSize: 13 }}>None yet — rate history builds as dispatches are logged.</div>}
+          </>)}
 
           {isBuyer && (<>
             <b>Sales orders ({partyOrders.length})</b>
