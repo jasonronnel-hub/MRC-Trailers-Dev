@@ -59,6 +59,12 @@ export default function UnitDrawer({ unit, statuses, role, close, onEdit }) {
             <dd>
               {unit.title_type?.name || '—'}
               {unit.title_received && <span className="tag" style={{ marginLeft: 6 }}>received</span>}
+              {unit.title_sent_date && (
+                <div className="muted" style={{ fontSize: 12 }}>
+                  sent {unit.title_sent_date}
+                  {unit.title_tracking_num && <> · FedEx <span className="mono">{unit.title_tracking_num}</span></>}
+                </div>
+              )}
             </dd>
             <dt>Location</dt><dd>{unit.physical_location || '—'}</dd>
             <dt>Purchase location</dt>

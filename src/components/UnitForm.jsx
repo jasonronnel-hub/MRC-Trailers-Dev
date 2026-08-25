@@ -20,6 +20,8 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
       ? titleTypes.find((t) => t.name === unit.title_type.name)?.id ?? ''
       : titleTypes.find((t) => t.name === 'Original')?.id ?? '',
     title_received: unit?.title_received ?? false,
+    title_sent_date: F(unit?.title_sent_date),
+    title_tracking_num: F(unit?.title_tracking_num),
     physical_location: F(unit?.physical_location),
     pickup_location_code: F(unit?.pickup_location_code),
     pickup_address: F(unit?.pickup_address),
@@ -55,6 +57,8 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
         status_id: f.status_id,
         title_type_id: f.title_type_id || null,
         title_received: f.title_received,
+        title_sent_date: f.title_sent_date || null,
+        title_tracking_num: f.title_tracking_num || null,
         physical_location: f.physical_location || null,
         pickup_location_code: f.pickup_location_code || null,
         pickup_address: f.pickup_address || null,
@@ -115,6 +119,12 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
             <label className="checkline" style={{ marginTop: 4 }}>
               <input type="checkbox" checked={f.title_received} onChange={set('title_received')} /> Title received
             </label>
+          </div>
+          <div className="field">
+            <label>Title/BOS sent (Traci’s FedEx workflow)</label>
+            <input type="date" value={f.title_sent_date} onChange={set('title_sent_date')} />
+            <input style={{ marginTop: 4 }} className="mono" value={f.title_tracking_num}
+              onChange={set('title_tracking_num')} placeholder="FedEx tracking #" />
           </div>
           <div className="field">
             <label>Physical location</label>

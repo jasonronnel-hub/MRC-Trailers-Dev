@@ -12,7 +12,7 @@ import { supabase } from './supabase'
 export const UNIT_SELECT = `
   id, legacy_bwt_id, unit_number, alt_unit_number, vin, model_year,
   purchase_price, pickup_location_code, pickup_address, physical_location,
-  condition_comments, ref_weight_lbs, title_received, voided, missing,
+  condition_comments, ref_weight_lbs, title_received, title_sent_date, title_tracking_num, voided, missing,
   purchase_location, purchase_location_address, sale_location, sale_cust_ref,
   deliver_wt_ref, purch_ticket_ref, sales_ticket_ref, wt_um, material_type,
   gross_wt, tare_wt, net_wt, confirmed_net,
