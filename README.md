@@ -18,11 +18,12 @@ Daily home base for MRC's Trailers & Containers division. See
 
 ## Database
 
-Apply migrations to the linked project:
+Apply migrations (dev project `dsgyhdinkmbyzkfazfep`, region us-east-2). The
+direct `db.<ref>.supabase.co` host is IPv6-only and unreachable from this
+network — use the session pooler:
 
 ```
-npx supabase link --project-ref <dev-project-ref>
-npx supabase db push
+npx supabase db push --db-url "postgresql://postgres.dsgyhdinkmbyzkfazfep:<DB-PASSWORD-URL-ENCODED>@aws-0-us-east-2.pooler.supabase.com:5432/postgres"
 ```
 
 Verify RLS (creates and removes throwaway `rls-test-*` users in the **dev** project):
