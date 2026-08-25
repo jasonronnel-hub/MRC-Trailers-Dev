@@ -3,6 +3,8 @@ rom_*.txt
 *.bak
 exports/
 *.csv
+# Crosswalks are lookup labels only (no dealer/unit data) — they ARE committed:
+!scripts/rom/crosswalks/*.csv
 
 # --- Secrets ---
 .env

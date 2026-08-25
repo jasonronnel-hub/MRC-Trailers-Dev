@@ -8,7 +8,13 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test:rls": "node scripts/test-rls.mjs"
+    "test:rls": "node scripts/test-rls.mjs",
+    "rom:extract": "bash scripts/rom/extract.sh",
+    "rom:load": "node scripts/rom/load-staging.mjs",
+    "rom:transform": "node scripts/rom/transform.mjs",
+    "rom:validate": "node scripts/rom/validate.mjs",
+    "rom:wipe": "node scripts/rom/wipe-rehearsal.mjs",
+    "rom:clean": "rm -rf exports"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

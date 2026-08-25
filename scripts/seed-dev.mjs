@@ -85,9 +85,10 @@ for (const o of orders) {
 
 // ---- units ------------------------------------------------------------------
 console.log('Seeding units…')
-let bwt = 70410
+// Demo units carry NO legacy_bwt_id: those ids belong to real ROM tickets,
+// and the migration upserts on them — fake ones could collide (found in the
+// first rehearsal: real BWT ids live in the same 70xxx range).
 const U = (o) => ({
-  legacy_bwt_id: bwt++,
   status_id: statusId(o.status ?? 'Purchased Not Ready'),
   equipment_type_id: equipId(o.equip),
   source_party_id: partyIds[o.source],
