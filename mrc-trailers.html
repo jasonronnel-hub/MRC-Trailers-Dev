@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MRC Trailers & Containers — Ops Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+  :root{
+    --paper:#eceae4; --panel:#f6f5f1; --ink:#1c1e22; --ink-soft:#4a4f57;
+    --line:#d5d2c8; --line-strong:#b9b5a8;
+    --amber:#e8a400; --amber-deep:#c98a00;
+    --st-notready:#7a828c; --st-ready:#e8a400; --st-sold:#2f6bd6;
+    --st-dispatched:#5b48c9; --st-delivered:#0f9d8f; --st-invoiced:#3a9d3a; --st-unknown:#c0392b;
+    --shadow:0 1px 0 rgba(0,0,0,.04),0 2px 8px rgba(0,0,0,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--paper);color:var(--ink);font-family:"Inter",system-ui,sans-serif;font-size:14px;line-height:1.45}
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+  .cond{font-family:"Saira Condensed","Arial Narrow",sans-serif;letter-spacing:.01em}
+  button{font-family:inherit;cursor:pointer}
+  input,textarea,select{font-family:inherit;font-size:14px}
+  #root{height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+  /* Top bar */
+  .topbar{display:flex;align-items:stretch;gap:0;border-bottom:2px solid var(--ink);background:var(--panel)}
+  .brand{display:flex;align-items:center;gap:10px;padding:12px 18px;border-right:2px solid var(--ink);min-width:220px}
+  .brand .mark{width:34px;height:34px;background:var(--amber);border:2px solid var(--ink);display:grid;place-items:center;font-family:"Saira Condensed";font-weight:700;font-size:20px;color:var(--ink);transform:skewX(-8deg)}
+  .brand .mark span{transform:skewX(8deg)}
+  .brand h1{font-family:"Saira Condensed";font-weight:700;font-size:19px;margin:0;line-height:1;text-transform:uppercase}
+  .brand h1 small{display:block;font-size:11px;font-weight:500;color:var(--ink-soft);letter-spacing:.14em}
+  .rail{flex:1;display:flex;overflow-x:auto}
+  .rail-stage{flex:1;min-width:110px;padding:8px 12px;border-right:1px solid var(--line);cursor:pointer;position:relative;background:var(--panel);transition:background .12s}
+  .rail-stage:hover{background:#efeee9}
+  .rail-stage.active{background:#e6e4dd}
+  .rail-stage .cnt{font-family:"Saira Condensed";font-weight:700;font-size:26px;line-height:1}
+  .rail-stage .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rail-stage .bar{position:absolute;left:0;bottom:0;height:4px;width:100%}
+
+  /* Body */
+  .body{flex:1;display:flex;min-height:0}
+  .nav{width:200px;min-width:200px;border-right:2px solid var(--ink);background:var(--panel);display:flex;flex-direction:column;padding:10px 0}
+  .nav button{display:flex;align-items:center;gap:10px;background:none;border:0;text-align:left;padding:11px 18px;font-size:14px;color:var(--ink-soft);font-weight:500;border-left:3px solid transparent}
+  .nav button.active{color:var(--ink);background:#e9e7e0;border-left-color:var(--amber);font-weight:600}
+  .nav .navtag{margin-left:auto;font-size:11px;background:var(--line);border-radius:10px;padding:1px 8px;color:var(--ink-soft)}
+  .nav .spacer{flex:1}
+  .nav .reset{margin:10px 14px;font-size:12px;color:var(--ink-soft);border:1px solid var(--line-strong);background:none;border-radius:6px;padding:7px}
+  .main{flex:1;min-width:0;overflow:auto;padding:20px 24px}
+
+  .pagehead{display:flex;align-items:baseline;gap:12px;margin:0 0 16px}
+  .pagehead h2{font-family:"Saira Condensed";text-transform:uppercase;font-weight:700;font-size:24px;margin:0}
+  .pagehead .sub{color:var(--ink-soft);font-size:13px}
+
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .chip{border:1px solid var(--line-strong);background:var(--panel);border-radius:20px;padding:5px 12px;font-size:12.5px;color:var(--ink-soft)}
+  .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+  table{width:100%;border-collapse:collapse;background:var(--panel);box-shadow:var(--shadow)}
+  th{font-family:"Saira Condensed";text-transform:uppercase;letter-spacing:.04em;font-weight:600;font-size:12px;color:var(--ink-soft);text-align:left;padding:9px 12px;border-bottom:2px solid var(--line-strong);position:sticky;top:0;background:var(--panel)}
+  td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:hover td{background:#efeee9;cursor:pointer}
+  .pill{display:inline-block;font-size:11px;font-weight:600;color:#fff;padding:2px 8px;border-radius:4px;white-space:nowrap}
+  .tag{display:inline-block;font-size:11px;padding:1px 7px;border:1px solid var(--line-strong);border-radius:4px;color:var(--ink-soft);background:#fff}
+  .muted{color:var(--ink-soft)}
+  .empty{padding:40px;text-align:center;color:var(--ink-soft);background:var(--panel);box-shadow:var(--shadow)}
+  .empty b{color:var(--ink)}
+
+  /* Drawer */
+  .drawer-wrap{position:fixed;inset:0;background:rgba(20,20,20,.35);display:flex;justify-content:flex-end;z-index:40}
+  .drawer{width:min(520px,94vw);background:var(--paper);height:100%;overflow:auto;border-left:2px solid var(--ink);box-shadow:-8px 0 24px rgba(0,0,0,.15)}
+  .drawer .dhead{padding:16px 20px;border-bottom:2px solid var(--ink);display:flex;align-items:flex-start;gap:10px;background:var(--panel);position:sticky;top:0}
+  .drawer .dhead h3{font-family:"Saira Condensed";font-size:22px;margin:0;text-transform:uppercase}
+  .drawer .dbody{padding:16px 20px}
+  .kv{display:grid;grid-template-columns:130px 1fr;gap:6px 12px;margin:0 0 14px}
+  .kv dt{color:var(--ink-soft);font-size:12.5px}
+  .kv dd{margin:0;font-size:13.5px}
+  .x{margin-left:auto;border:0;background:none;font-size:22px;line-height:1;color:var(--ink-soft)}
+  .ticket{font-family:"JetBrains Mono";font-weight:600;background:#fff;border:1px dashed var(--line-strong);padding:1px 6px;border-radius:3px}
+
+  /* Assistant */
+  .asst{display:flex;flex-direction:column;height:100%}
+  .chatlog{flex:1;overflow:auto;padding:6px 2px}
+  .msg{margin:10px 0;display:flex;gap:10px}
+  .msg .who{width:30px;height:30px;flex:none;border:2px solid var(--ink);display:grid;place-items:center;font-family:"Saira Condensed";font-weight:700;font-size:13px}
+  .msg.user .who{background:var(--ink);color:#fff}
+  .msg.bot .who{background:var(--amber)}
+  .msg .bubble{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 13px;max-width:640px;box-shadow:var(--shadow)}
+  .msg.user .bubble{background:#e9e7e0}
+  .did{margin-top:8px;font-size:12px;border-top:1px dashed var(--line-strong);padding-top:7px}
+  .did b{font-family:"Saira Condensed";text-transform:uppercase;letter-spacing:.04em;font-size:11px;color:var(--amber-deep)}
+  .did ul{margin:4px 0 0;padding-left:16px}
+  .composer{border-top:2px solid var(--ink);padding:12px;background:var(--panel)}
+  .composer textarea{width:100%;border:1px solid var(--line-strong);border-radius:8px;padding:10px;resize:vertical;min-height:52px;background:#fff}
+  .composer .row{display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap}
+  .btn{background:var(--amber);border:2px solid var(--ink);border-radius:7px;padding:8px 16px;font-weight:600;font-family:"Saira Condensed";text-transform:uppercase;letter-spacing:.03em;font-size:15px}
+  .btn:disabled{opacity:.5}
+  .btn.ghost{background:var(--panel);color:var(--ink)}
+  .btn.sm{padding:5px 11px;font-size:13px}
+  .hint{font-size:12px;color:var(--ink-soft)}
+  .prompts{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+  .prompts button{font-size:12px;border:1px solid var(--line-strong);background:#fff;border-radius:16px;padding:5px 10px;color:var(--ink-soft)}
+  details.import{margin-top:10px;border:1px solid var(--line-strong);border-radius:8px;background:#fff}
+  details.import summary{padding:9px 12px;font-weight:600;cursor:pointer;font-family:"Saira Condensed";text-transform:uppercase;font-size:14px}
+  details.import .ibody{padding:0 12px 12px}
+  details.import textarea{width:100%;min-height:120px;border:1px solid var(--line-strong);border-radius:6px;padding:8px;font-family:"JetBrains Mono";font-size:12px}
+  .banner{background:#fff6dc;border:1px solid var(--amber);border-left:4px solid var(--amber);padding:8px 12px;border-radius:6px;font-size:12.5px;margin-bottom:12px}
+  .warnrow{color:var(--st-unknown);font-size:12px;margin-top:2px}
+  @media (max-width:820px){
+    .brand{min-width:150px}
+    .nav{width:56px;min-width:56px}
+    .nav button span.txt{display:none}
+    .nav .navtag{display:none}
+    .kv{grid-template-columns:110px 1fr}
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const {useState,useEffect,useRef,useMemo} = React;
+
+/* ---------- constants ---------- */
+const STATUSES = [
+  {key:"Purchase — Not Ready", short:"Not Ready", color:"var(--st-notready)"},
+  {key:"Ready — Sales Required", short:"Ready · Sell", color:"var(--st-ready)"},
+  {key:"Sold — Dispatch Required", short:"Sold", color:"var(--st-sold)"},
+  {key:"Dispatched — Delivery Required", short:"Dispatched", color:"var(--st-dispatched)"},
+  {key:"Delivered — Invoice Required", short:"Delivered", color:"var(--st-delivered)"},
+  {key:"Invoiced / Closed", short:"Invoiced", color:"var(--st-invoiced)"},
+  {key:"State Unknown", short:"Unknown", color:"var(--st-unknown)"},
+];
+const statusColor = k => (STATUSES.find(s=>s.key===k)||{}).color || "#888";
+const SOURCES = ["FedEx Ground","Walmart","Union Pacific","Hub Group","JB Hunt","Milestone","Other"];
+const EQUIP = {
+  "Drop Frame Pup":{item:"7010",wt:8500},
+  "Straight Rail Pup":{item:"7015",wt:9000},
+  "Long Straight Rail":{item:"7020",wt:10000},
+  "Aluminum Container":{item:"7040",wt:10000},
+  "Steel Container":{item:"7041",wt:10400},
+  "Chassis":{item:"7045",wt:9000},
+  "Tractor":{item:"7050",wt:9500},
+  "Switcher":{item:"7050",wt:9000},
+  "Converter Dolly":{item:"7060",wt:2200},
+  "Composite":{item:"7025",wt:10500},
+  "FRP":{item:"7028",wt:10500},
+};
+
+/* ---------- seed (fictional) ---------- */
+const seed = () => {
+  let bwt=70410, so=1041;
+  const B=(o)=>({id:"B"+Math.random().toString(36).slice(2,7),destruction:"",remaMember:false,notes:"",...o});
+  const buyers=[
+    B({name:"SA Recycling",group:"Trailer Buyer",billingAddress:"Anaheim, CA",contactName:"Mike Delgado",contactEmail:"scale@sarecycling.example",paymentTerms:"Net 30",paymentMethod:"ACH",deductionModel:"No Deductions",standardDeductions:"None — blended price",destruction:"2025-03-14",remaMember:true,notes:"Blended price, no deductions. ANY deduction on their ticket is a mistake — call TJ."}),
+    B({name:"Sims Metal Management",group:"Trailer Buyer",billingAddress:"Richmond, VA (central billing)",contactName:"AR Dept",contactEmail:"ap@simsmm.example",paymentTerms:"Net 30",paymentMethod:"Check",deductionModel:"Standard",standardDeductions:"Wood floor 2,000 lb; tires $10/ea",destruction:"2024-11-02",remaMember:true,mergedParent:true,notes:"MERGED account. Set Sims as Sold-To; put the actual yard in Sales Location."}),
+    B({name:"Pacific Steel & Recycling",group:"Trailer Buyer",billingAddress:"Great Falls, MT",contactName:"Sam Wilson",contactEmail:"sam@pacificsteel.example",paymentTerms:"Net 30",paymentMethod:"ACH",deductionModel:"Standard",standardDeductions:"Wood floor 2,500 lb",destruction:"2025-06-20",remaMember:true,notes:"Strong long-standing relationship. Bozeman haul is tight on freight."}),
+    B({name:"Clark Iron & Metal",group:"Trailer Buyer",billingAddress:"Murfreesboro, TN",contactName:"front desk",contactEmail:"",paymentTerms:"COD",paymentMethod:"Check",deductionModel:"Variable",standardDeductions:"",destruction:"",remaMember:false,notes:"NEW yard, cold-called. No destruction agreement on file — do NOT ship FedEx/Walmart until signed."}),
+    B({name:"Western Metals",group:"Trailer Buyer",billingAddress:"Salt Lake City, UT",contactName:"RJ",contactEmail:"rj@westernmetals.example",paymentTerms:"Net 30",paymentMethod:"ACH",deductionModel:"Standard",standardDeductions:"Wood floor 2,000 lb",destruction:"2025-01-09",remaMember:true,notes:""}),
+    B({name:"Nashville Heavy Haul",group:"Freight",billingAddress:"Nashville, TN",contactName:"dispatch",contactEmail:"dispatch@nhh.example",paymentTerms:"Net 15",paymentMethod:"ACH",deductionModel:"—",notes:"Hauler. Good for TN/KY single-unit tows."}),
+  ];
+  const byName=n=>buyers.find(b=>b.name===n);
+  const U=(o)=>{const e=EQUIP[o.equipmentType]||{};return {id:"W"+(bwt++),soldToBuyerId:null,salesOrderId:null,titleStatus:"Title",comments:"",pickupLocationCode:"",pickupAddress:"",physicalLocation:"",purchasePrice:null,notes:"",refWeight:e.wt,itemCode:e.item,...o};};
+  const units=[
+    U({unitNumber:"FDX-2841",vin:"DEMO0FEDEX0001",source:"FedEx Ground",equipmentType:"Drop Frame Pup",physicalLocation:"Belleville, MI",status:"Ready — Sales Required",purchasePrice:900,pickupLocationCode:"493"}),
+    U({unitNumber:"FDX-2844",vin:"DEMO0FEDEX0002",source:"FedEx Ground",equipmentType:"Drop Frame Pup",physicalLocation:"Belleville, MI",status:"Ready — Sales Required",purchasePrice:900,pickupLocationCode:"493"}),
+    U({unitNumber:"FDX-3102",vin:"DEMO0FEDEX0003",source:"FedEx Ground",equipmentType:"Drop Frame Pup",physicalLocation:"Grove City, OH",status:"Purchase — Not Ready",purchasePrice:900,pickupLocationCode:"512"}),
+    U({unitNumber:"FDX-7781",vin:"DEMO0FEDEX0004",source:"FedEx Ground",equipmentType:"Switcher",physicalLocation:"Kansas City, MO",status:"Ready — Sales Required",purchasePrice:650,titleStatus:"Bill of Sale"}),
+    U({unitNumber:"FDX-DLY-55",vin:"DEMO0FEDEX0005",source:"FedEx Ground",equipmentType:"Converter Dolly",physicalLocation:"Murfreesboro, TN",status:"Ready — Sales Required",purchasePrice:120,comments:"Orphan dolly, remote. GPS may be attached — verify removed."}),
+    U({unitNumber:"WMT-61457",vin:"DEMO0WMT00001",source:"Walmart",equipmentType:"Long Straight Rail",physicalLocation:"Rockwall, TX",status:"Purchase — Not Ready",purchasePrice:1033,pickupLocationCode:"3530",pickupAddress:"850 W Rusk St, Rockwall, TX",comments:"Tires a bit worn but ok; door closes."}),
+    U({unitNumber:"WMT-58204",vin:"DEMO0WMT00002",source:"Walmart",equipmentType:"Long Straight Rail",physicalLocation:"Bethlehem, PA",status:"Purchase — Not Ready",purchasePrice:608,pickupLocationCode:"7356",pickupAddress:"3215 Commerce Center Blvd, Bethlehem, PA",comments:"Hole in floor; roll-up door damaged."}),
+    U({unitNumber:"WMT-45021",vin:"DEMO0WMT00003",source:"Walmart",equipmentType:"Long Straight Rail",length:"45ft",physicalLocation:"Fort Worth, TX",status:"Purchase — Not Ready",purchasePrice:700,comments:"45ft — likely ALL STEEL. Verify VIN; price ~10¢/lb not 17¢."}),
+    U({unitNumber:"UP-CN-8890",vin:"DEMO0UP000001",source:"Union Pacific",equipmentType:"Aluminum Container",physicalLocation:"LA Basin, CA",status:"Ready — Sales Required",purchasePrice:820}),
+    U({unitNumber:"UP-CN-8891",vin:"DEMO0UP000002",source:"Union Pacific",equipmentType:"Steel Container",physicalLocation:"LA Basin, CA",status:"Purchase — Not Ready",purchasePrice:540}),
+    U({unitNumber:"HUB-4471",vin:"DEMO0HUB00001",source:"Hub Group",equipmentType:"Steel Container",physicalLocation:"Chicago, IL",status:"Ready — Sales Required",purchasePrice:560}),
+    U({unitNumber:"FDX-2790",vin:"DEMO0FEDEX0006",source:"FedEx Ground",equipmentType:"Long Straight Rail",physicalLocation:"Harrisburg, PA",status:"Sold — Dispatch Required",purchasePrice:700}),
+    U({unitNumber:"FDX-2795",vin:"DEMO0FEDEX0007",source:"FedEx Ground",equipmentType:"Drop Frame Pup",physicalLocation:"Anaheim, CA",status:"Dispatched — Delivery Required",purchasePrice:900}),
+    U({unitNumber:"FDX-2610",vin:"DEMO0FEDEX0008",source:"FedEx Ground",equipmentType:"Drop Frame Pup",physicalLocation:"Anaheim, CA",status:"Delivered — Invoice Required",purchasePrice:900}),
+  ];
+  const orders=[
+    {id:"SO-"+(so++),buyerId:byName("SA Recycling").id,customerReference:"AUG 26",itemCode:"7010",priceType:"per lb",price:0.17,refWeight:8500,headerNotes:"No deductions — blended price per SA email 8/12 3:14pm.",detailNotes:"",createdDate:"2026-08-12",open:true},
+    {id:"SO-"+(so++),buyerId:byName("Pacific Steel & Recycling").id,customerReference:"AUG 26",itemCode:"7040",priceType:"per ton",price:190,refWeight:10000,headerNotes:"Std deduction: none on aluminum containers. Confirmed 8/10.",detailNotes:"",createdDate:"2026-08-10",open:true},
+  ];
+  // wire the later-stage demo units to SO-1041
+  units[11].salesOrderId="SO-1041"; units[11].soldToBuyerId=byName("SA Recycling").id;
+  units[12].salesOrderId="SO-1041"; units[12].soldToBuyerId=byName("SA Recycling").id;
+  units[13].salesOrderId="SO-1041"; units[13].soldToBuyerId=byName("SA Recycling").id;
+  return {buyers,units,orders,seq:{bwt,so},chat:[]};
+};
+
+/* ---------- persistence ---------- */
+const KEY="mrc:trailers:v1";
+async function loadState(){
+  try{ if(window.storage&&window.storage.get){ const r=await window.storage.get(KEY); if(r&&r.value) return JSON.parse(r.value);} }catch(e){}
+  return null;
+}
+async function saveState(s){
+  try{ if(window.storage&&window.storage.set){ await window.storage.set(KEY, JSON.stringify(s)); } }catch(e){}
+}
+
+/* ---------- bid-sheet parser (deterministic) ---------- */
+function parseBidSheet(text){
+  const rows=text.split(/\r?\n/).map(r=>r).filter(r=>r.trim().length);
+  if(!rows.length) return {units:[],error:"Nothing to parse."};
+  const split=r=> r.includes("\t")? r.split("\t") : r.split(/\s{2,}|,(?=\S)/);
+  // find header row
+  let hi=rows.findIndex(r=>/unit/i.test(r)&&/vin/i.test(r));
+  if(hi<0) return {units:[],error:"Couldn't find a header row containing 'Unit' and 'Vin'."};
+  const heads=split(rows[hi]).map(h=>h.trim().toLowerCase());
+  const idx=(...names)=>{for(const n of names){const i=heads.findIndex(h=>h.includes(n)); if(i>=0)return i;}return -1;};
+  const iUnit=idx("unit"), iVin=idx("vin"), iLoc=idx("pickup location","location"),
+        iAddr=idx("address"), iCom=idx("comment"), iPrice=idx("mrc","bid","price","amount");
+  const out=[];
+  for(let r=hi+1;r<rows.length;r++){
+    const c=split(rows[r]).map(x=>x.trim());
+    if(!c.length||!(c[iUnit]||c[iVin])) continue;
+    const price=iPrice>=0? parseFloat((c[iPrice]||"").replace(/[^0-9.\-]/g,"")):null;
+    out.push({
+      unitNumber:(c[iUnit]||"").trim(),
+      vin:(c[iVin]||"").trim(),
+      pickupLocationCode:iLoc>=0?(c[iLoc]||"").trim():"",
+      pickupAddress:iAddr>=0?(c[iAddr]||"").trim():"",
+      comments:iCom>=0?(c[iCom]||"").trim():"",
+      purchasePrice:isNaN(price)?null:price,
+    });
+  }
+  return {units:out,error:out.length?null:"Found the header but no data rows."};
+}
+
+/* ---------- AI bridge ---------- */
+async function callAI(system,user){
+  const combined = system + "\n\n=== USER MESSAGE ===\n" + user;
+  // Prefer native artifact bridge if present
+  if(window.claude && window.claude.complete){
+    return await window.claude.complete(combined);
+  }
+  const res = await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:combined}]})
+  });
+  const data = await res.json();
+  return (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
+}
+function extractJSON(t){
+  if(!t) return null;
+  let s=t.replace(/```json/gi,"```").split("```").map(x=>x.trim());
+  // try each fenced block, else whole
+  const cands = s.filter(Boolean).concat([t]);
+  for(const c of cands){
+    const a=c.indexOf("{"), b=c.lastIndexOf("}");
+    if(a>=0&&b>a){ try{ return JSON.parse(c.slice(a,b+1)); }catch(e){} }
+  }
+  return null;
+}
+
+/* ---------- action executor ---------- */
+function resolveBuyer(state,ref){
+  if(!ref) return null;
+  const r=(""+ref).toLowerCase();
+  return state.buyers.find(b=>b.id===ref) ||
+         state.buyers.find(b=>b.name.toLowerCase()===r) ||
+         state.buyers.find(b=>b.name.toLowerCase().includes(r)) || null;
+}
+function resolveOrder(state,ref,buyerId){
+  if(!ref&&buyerId) return state.orders.find(o=>o.buyerId===buyerId&&o.open);
+  if(!ref) return null;
+  const r=(""+ref).toLowerCase();
+  return state.orders.find(o=>o.id.toLowerCase()===r) ||
+         state.orders.find(o=>(o.id+" "+o.customerReference).toLowerCase().includes(r)) || null;
+}
+function selectUnits(state,sel){
+  if(!sel) return [];
+  let list=state.units.slice();
+  if(sel.ids&&sel.ids.length) return list.filter(u=>sel.ids.includes(u.id));
+  if(sel.unitNumbers&&sel.unitNumbers.length){
+    const set=sel.unitNumbers.map(x=>(""+x).toLowerCase());
+    return list.filter(u=>set.includes((u.unitNumber||"").toLowerCase())||set.includes((u.id||"").toLowerCase()));
+  }
+  if(sel.source) list=list.filter(u=>u.source.toLowerCase()===(""+sel.source).toLowerCase());
+  if(sel.status) list=list.filter(u=>u.status===sel.status || u.status.toLowerCase().includes((""+sel.status).toLowerCase()));
+  if(sel.equipmentType) list=list.filter(u=>u.equipmentType.toLowerCase().includes((""+sel.equipmentType).toLowerCase()));
+  if(sel.physicalLocation) list=list.filter(u=>(u.physicalLocation||"").toLowerCase().includes((""+sel.physicalLocation).toLowerCase()));
+  return list;
+}
+function applyActions(prev,actions){
+  const state=JSON.parse(JSON.stringify(prev));
+  const log=[];
+  for(const a of (actions||[])){
+    try{
+      if(a.type==="create_buyer"){
+        const b={id:"B"+Math.random().toString(36).slice(2,7),group:"Trailer Buyer",remaMember:false,notes:"",destruction:"",...a};
+        delete b.type; state.buyers.push(b); log.push("Created buyer “"+b.name+"”");
+      }
+      else if(a.type==="update_buyer"){
+        const b=resolveBuyer(state,a.buyer||a.buyerId||a.name);
+        if(!b){log.push("⚠︎ Couldn't find buyer “"+(a.buyer||a.name)+"”");continue;}
+        Object.keys(a).forEach(k=>{if(!["type","buyer","buyerId"].includes(k))b[k]=a[k];});
+        log.push("Updated buyer “"+b.name+"”");
+      }
+      else if(a.type==="create_order"){
+        const b=resolveBuyer(state,a.buyer||a.buyerId||a.buyerName);
+        if(!b){log.push("⚠︎ Couldn't find buyer for order “"+(a.buyer||a.buyerName)+"”");continue;}
+        const id="SO-"+(state.seq.so++);
+        state.orders.push({id,buyerId:b.id,customerReference:a.customerReference||"",itemCode:a.itemCode||"",priceType:a.priceType||"per ton",price:a.price??null,refWeight:a.refWeight??null,headerNotes:a.headerNotes||"",detailNotes:a.detailNotes||"",createdDate:new Date().toISOString().slice(0,10),open:true});
+        log.push("Created "+id+" for "+b.name+(a.customerReference?" ("+a.customerReference+")":""));
+      }
+      else if(a.type==="add_units"){
+        const arr=a.units||[];
+        arr.forEach(u=>{
+          const e=EQUIP[u.equipmentType]||{};
+          state.units.push({id:"W"+(state.seq.bwt++),soldToBuyerId:null,salesOrderId:null,titleStatus:u.titleStatus||"Title",comments:u.comments||"",pickupLocationCode:u.pickupLocationCode||"",pickupAddress:u.pickupAddress||"",physicalLocation:u.physicalLocation||"",purchasePrice:u.purchasePrice??null,notes:u.notes||"",refWeight:u.refWeight??e.wt??null,itemCode:u.itemCode||e.item||"",status:u.status||"Purchase — Not Ready",source:u.source||"Other",equipmentType:u.equipmentType||"Long Straight Rail",unitNumber:u.unitNumber||"",vin:u.vin||"",length:u.length||""});
+        });
+        log.push("Added "+arr.length+" unit"+(arr.length!==1?"s":""));
+      }
+      else if(a.type==="attach_units"){
+        const b=resolveBuyer(state,a.buyer||a.buyerName||a.buyerId);
+        const o=resolveOrder(state,a.salesOrder||a.order||a.orderId,b&&b.id);
+        const units=selectUnits(state,a.units||a.select||{});
+        if(!o){log.push("⚠︎ Couldn't find a sales order to attach to");continue;}
+        const buyer=b||state.buyers.find(x=>x.id===o.buyerId);
+        let n=0;
+        units.forEach(u=>{const t=state.units.find(x=>x.id===u.id); if(t){t.salesOrderId=o.id;t.soldToBuyerId=buyer?buyer.id:t.soldToBuyerId;t.status="Sold — Dispatch Required";n++;}});
+        log.push("Attached "+n+" unit"+(n!==1?"s":"")+" to "+o.id+(buyer?" ("+buyer.name+")":"")+" → Sold");
+      }
+      else if(a.type==="set_status"){
+        const units=selectUnits(state,a.units||a.select||{});
+        let n=0; units.forEach(u=>{const t=state.units.find(x=>x.id===u.id); if(t){t.status=a.status;if(a.hauler)t.notes=((t.notes?t.notes+" · ":"")+"Hauler: "+a.hauler);n++;}});
+        log.push("Moved "+n+" unit"+(n!==1?"s":"")+" → "+(STATUSES.find(s=>s.key===a.status)||{short:a.status}).short);
+      }
+      else if(a.type==="add_note"){
+        if(a.buyer||a.buyerName){const b=resolveBuyer(state,a.buyer||a.buyerName); if(b){b.notes=(b.notes?b.notes+"\n":"")+a.note; log.push("Note added to “"+b.name+"”");}}
+        else {const units=selectUnits(state,a.units||a.select||{}); let n=0; units.forEach(u=>{const t=state.units.find(x=>x.id===u.id); if(t){t.notes=(t.notes?t.notes+"\n":"")+a.note;n++;}}); log.push("Note added to "+n+" unit"+(n!==1?"s":""));}
+      }
+      else { log.push("⚠︎ Unknown action: "+a.type); }
+    }catch(e){ log.push("⚠︎ Error on "+a.type+": "+e.message); }
+  }
+  return {state,log};
+}
+
+/* ---------- system prompt ---------- */
+function buildSystem(state){
+  const buyers=state.buyers.map(b=>b.name+" [id "+b.id+", "+b.deductionModel+(b.destruction?"":" , NO destruction agmt")+"]").join("; ");
+  const orders=state.orders.map(o=>{const b=state.buyers.find(x=>x.id===o.buyerId);return o.id+" ("+(b?b.name:"?")+", ref "+o.customerReference+", item "+o.itemCode+")";}).join("; ");
+  const counts=STATUSES.map(s=>s.short+":"+state.units.filter(u=>u.status===s.key).length).join(", ");
+  return `You are the assistant inside MRC's Trailers & Containers ops console (a scrap-metal trailer brokerage). You turn plain-English requests into structured data operations, then confirm in a friendly, concise sentence or two. MRC BUYS end-of-life trailers/containers/tractors from fleets (FedEx Ground, Walmart, Union Pacific, Hub Group, JB Hunt) and SELLS them to scrap yards (the "buyers") for destruction.
+
+Reply with ONE JSON object only, no prose outside it:
+{"reply":"<short human confirmation or answer>","actions":[ ... ]}
+
+ACTION TYPES (include only what's needed; use [] for pure questions):
+- create_buyer: {type,name,group?("Trailer Buyer"|"Freight"),billingAddress?,contactName?,contactEmail?,contactPhone?,paymentTerms?,paymentMethod?,deductionModel?("No Deductions"|"Standard"|"Variable"),standardDeductions?,destruction?(YYYY-MM-DD signed date),remaMember?(bool),mergedParent?(bool),notes?}
+- update_buyer: {type,buyer:"<name or id>", ...any buyer fields to change}
+- create_order: {type,buyer:"<name or id>",customerReference?(e.g."AUG 26"),itemCode?(7000-series),priceType?("per lb"|"per ton"|"flat"),price?,refWeight?,headerNotes?,detailNotes?}
+- add_units: {type,units:[{unitNumber,vin,source,equipmentType,physicalLocation?,pickupLocationCode?,pickupAddress?,comments?,purchasePrice?,titleStatus?,status?}]}
+- attach_units: {type,buyer?,salesOrder?:"<SO id or ref>",units:{ids?:[],unitNumbers?:[],source?,status?,equipmentType?,physicalLocation?}}  // attaching flips units to "Sold — Dispatch Required"
+- set_status: {type,status:<one of the exact status strings>,hauler?,units:{...same selector...}}
+- add_note: {type,note,buyer?:"<name>"}  OR  {type,note,units:{...selector...}}   // buyer notes are Kim's reference field
+
+EXACT status strings: ${STATUSES.map(s=>'"'+s.key+'"').join(", ")}.
+equipmentType options + default item codes: ${Object.entries(EQUIP).map(([k,v])=>k+"("+v.item+")").join(", ")}.
+
+RULES: Match buyers/orders by name loosely. Never invent data the user didn't give — leave optional fields out. If a buyer has NO destruction agreement, and the user tries to attach FedEx or Walmart units to them, still do it but add a warning in "reply". Put buyer confirmation-email text or pricing memos into headerNotes/notes. For customerReference use ABBREV MONTH + 2-digit year like "AUG 26".
+
+CURRENT DATA — buyers: ${buyers||"(none)"}. Open orders: ${orders||"(none)"}. Unit counts: ${counts}. Total units: ${state.units.length}.
+Answer data questions using this snapshot in "reply" with actions:[].`;
+}
+
+/* ---------- UI ---------- */
+function Pill({status}){return <span className="pill" style={{background:statusColor(status)}}>{(STATUSES.find(s=>s.key===status)||{short:status}).short}</span>;}
+
+function App(){
+  const [state,setState]=useState(null);
+  const [tab,setTab]=useState("inventory");
+  const [statusFilter,setStatusFilter]=useState(null);
+  const [sourceFilter,setSourceFilter]=useState(null);
+  const [drawer,setDrawer]=useState(null); // {kind,id}
+  const [ready,setReady]=useState(false);
+
+  useEffect(()=>{(async()=>{const s=await loadState(); setState(s||seed()); setReady(true);})();},[]);
+  useEffect(()=>{ if(ready&&state) saveState(state); },[state,ready]);
+
+  if(!state) return <div style={{padding:40}} className="cond">Loading ops console…</div>;
+
+  const counts={}; STATUSES.forEach(s=>counts[s.key]=state.units.filter(u=>u.status===s.key).length);
+
+  const doReset=()=>{ if(confirm("Reset to fresh demo data? Your current changes will be cleared.")){ const s=seed(); setState(s); }};
+
+  return <>
+    <div className="topbar">
+      <div className="brand">
+        <div className="mark"><span>M</span></div>
+        <h1>MRC<small>Trailers · Containers</small></h1>
+      </div>
+      <div className="rail">
+        {STATUSES.filter(s=>s.key!=="State Unknown"||counts[s.key]>0).map(s=>
+          <div key={s.key} className={"rail-stage"+(statusFilter===s.key?" active":"")}
+               onClick={()=>{setTab("inventory");setStatusFilter(statusFilter===s.key?null:s.key);}}>
+            <div className="cnt cond">{counts[s.key]}</div>
+            <div className="lbl">{s.short}</div>
+            <div className="bar" style={{background:s.color}}></div>
+          </div>
+        )}
+      </div>
+    </div>
+
+    <div className="body">
+      <div className="nav">
+        {[["inventory","Inventory",state.units.length],["buyers","Buyers",state.buyers.length],["orders","Sales Orders",state.orders.length],["assistant","Assistant",null]].map(([k,label,n])=>
+          <button key={k} className={tab===k?"active":""} onClick={()=>setTab(k)}>
+            <span className="txt">{label}</span>{n!=null&&<span className="navtag">{n}</span>}
+          </button>
+        )}
+        <div className="spacer"></div>
+        <button className="reset" onClick={doReset}>Reset demo data</button>
+      </div>
+
+      <div className="main">
+        {tab==="inventory"&&<Inventory state={state} statusFilter={statusFilter} setStatusFilter={setStatusFilter} sourceFilter={sourceFilter} setSourceFilter={setSourceFilter} onOpen={u=>setDrawer({kind:"unit",id:u.id})}/>}
+        {tab==="buyers"&&<Buyers state={state} onOpen={b=>setDrawer({kind:"buyer",id:b.id})}/>}
+        {tab==="orders"&&<Orders state={state} onOpen={o=>setDrawer({kind:"order",id:o.id})}/>}
+        {tab==="assistant"&&<Assistant state={state} setState={setState}/>}
+      </div>
+    </div>
+
+    {drawer&&<Drawer state={state} drawer={drawer} close={()=>setDrawer(null)}/>}
+  </>;
+}
+
+function Inventory({state,statusFilter,setStatusFilter,sourceFilter,setSourceFilter,onOpen}){
+  let units=state.units.slice();
+  if(statusFilter) units=units.filter(u=>u.status===statusFilter);
+  if(sourceFilter) units=units.filter(u=>u.source===sourceFilter);
+  units.sort((a,b)=>STATUSES.findIndex(s=>s.key===a.status)-STATUSES.findIndex(s=>s.key===b.status));
+  const buyerName=id=>{const b=state.buyers.find(x=>x.id===id);return b?b.name:"";};
+  return <div>
+    <div className="pagehead"><h2>Inventory</h2><span className="sub">{units.length} of {state.units.length} broker weight tickets</span></div>
+    <div className="filters">
+      <span className={"chip"+(!statusFilter?" on":"")} onClick={()=>setStatusFilter(null)}>All statuses</span>
+      {STATUSES.filter(s=>state.units.some(u=>u.status===s.key)).map(s=><span key={s.key} className={"chip"+(statusFilter===s.key?" on":"")} onClick={()=>setStatusFilter(statusFilter===s.key?null:s.key)}>{s.short}</span>)}
+      <span style={{width:14}}></span>
+      <span className={"chip"+(!sourceFilter?" on":"")} onClick={()=>setSourceFilter(null)}>All sources</span>
+      {SOURCES.filter(s=>state.units.some(u=>u.source===s)).map(s=><span key={s} className={"chip"+(sourceFilter===s?" on":"")} onClick={()=>setSourceFilter(sourceFilter===s?null:s)}>{s}</span>)}
+    </div>
+    {units.length? <table>
+      <thead><tr><th>BWT</th><th>Unit #</th><th>Type</th><th>Source</th><th>Location</th><th>Status</th><th>Sold&nbsp;to</th><th>SO</th></tr></thead>
+      <tbody>{units.map(u=><tr key={u.id} onClick={()=>onOpen(u)}>
+        <td><span className="ticket">{u.id}</span></td>
+        <td>{u.unitNumber||<span className="muted">—</span>}</td>
+        <td>{u.equipmentType}{u.length?" · "+u.length:""}</td>
+        <td>{u.source}</td>
+        <td className="muted">{u.physicalLocation||"—"}</td>
+        <td><Pill status={u.status}/></td>
+        <td className="muted">{buyerName(u.soldToBuyerId)||"—"}</td>
+        <td className="mono muted">{u.salesOrderId||"—"}</td>
+      </tr>)}</tbody>
+    </table> : <div className="empty">No units match this filter. Clear the filters, or add units in the <b>Assistant</b> tab.</div>}
+  </div>;
+}
+
+function Buyers({state,onOpen}){
+  return <div>
+    <div className="pagehead"><h2>Buyers</h2><span className="sub">{state.buyers.length} accounts</span></div>
+    <table>
+      <thead><tr><th>Name</th><th>Group</th><th>Deductions</th><th>Terms</th><th>Destruction agmt</th><th>REMA</th></tr></thead>
+      <tbody>{state.buyers.map(b=><tr key={b.id} onClick={()=>onOpen(b)}>
+        <td><b>{b.name}</b>{b.mergedParent&&<span className="tag" style={{marginLeft:6}}>merged</span>}<div className="muted" style={{fontSize:12}}>{b.billingAddress}</div></td>
+        <td><span className="tag">{b.group}</span></td>
+        <td>{b.deductionModel}</td>
+        <td className="muted">{b.paymentTerms} · {b.paymentMethod}</td>
+        <td>{b.destruction? <span className="mono">{b.destruction}</span> : <span className="warnrow">none on file</span>}</td>
+        <td>{b.remaMember?"✓":<span className="muted">—</span>}</td>
+      </tr>)}</tbody>
+    </table>
+  </div>;
+}
+
+function Orders({state,onOpen}){
+  const bn=id=>{const b=state.buyers.find(x=>x.id===id);return b?b.name:"?";};
+  const cnt=id=>state.units.filter(u=>u.salesOrderId===id).length;
+  return <div>
+    <div className="pagehead"><h2>Sales Orders</h2><span className="sub">internal only — buyers issue their own PO</span></div>
+    <table>
+      <thead><tr><th>SO #</th><th>Buyer</th><th>Ref</th><th>Item</th><th>Price</th><th>Ref wt</th><th>Units</th><th>Header note</th></tr></thead>
+      <tbody>{state.orders.map(o=><tr key={o.id} onClick={()=>onOpen(o)}>
+        <td className="mono"><b>{o.id}</b></td>
+        <td>{bn(o.buyerId)}</td>
+        <td><span className="tag">{o.customerReference||"—"}</span></td>
+        <td className="mono">{o.itemCode||"—"}</td>
+        <td>{o.price!=null? "$"+o.price+" "+o.priceType : "—"}</td>
+        <td className="muted">{o.refWeight?o.refWeight.toLocaleString()+" lb":"—"}</td>
+        <td>{cnt(o.id)}</td>
+        <td className="muted" style={{fontSize:12,maxWidth:220}}>{o.headerNotes||"—"}</td>
+      </tr>)}</tbody>
+    </table>
+  </div>;
+}
+
+function Drawer({state,drawer,close}){
+  const bn=id=>{const b=state.buyers.find(x=>x.id===id);return b?b.name:"—";};
+  let title,color,body;
+  if(drawer.kind==="unit"){
+    const u=state.units.find(x=>x.id===drawer.id); if(!u)return null;
+    title=u.unitNumber||u.id; color=statusColor(u.status);
+    const o=state.orders.find(x=>x.id===u.salesOrderId);
+    body=<>
+      <div style={{marginBottom:12}}><Pill status={u.status}/></div>
+      <dl className="kv">
+        <dt>BWT #</dt><dd><span className="ticket">{u.id}</span></dd>
+        <dt>VIN</dt><dd className="mono">{u.vin||"—"}</dd>
+        <dt>Type</dt><dd>{u.equipmentType}{u.length?" · "+u.length:""} <span className="muted">(item {u.itemCode})</span></dd>
+        <dt>Source</dt><dd>{u.source}</dd>
+        <dt>Ref weight</dt><dd>{u.refWeight?u.refWeight.toLocaleString()+" lb":"—"}</dd>
+        <dt>Purchase price</dt><dd>{u.purchasePrice!=null?"$"+u.purchasePrice:"—"}</dd>
+        <dt>Title</dt><dd>{u.titleStatus}</dd>
+        <dt>Location</dt><dd>{u.physicalLocation||"—"}</dd>
+        <dt>Pickup code</dt><dd className="mono">{u.pickupLocationCode||"—"}</dd>
+        <dt>Pickup address</dt><dd>{u.pickupAddress||"—"}</dd>
+        <dt>Sold to</dt><dd>{bn(u.soldToBuyerId)}</dd>
+        <dt>Sales order</dt><dd className="mono">{u.salesOrderId||"—"}{o&&" · "+o.customerReference}</dd>
+      </dl>
+      {u.comments&&<div className="banner"><b>Condition:</b> {u.comments}</div>}
+      {u.notes&&<div><b className="cond">Notes</b><div className="muted" style={{whiteSpace:"pre-wrap"}}>{u.notes}</div></div>}
+    </>;
+  } else if(drawer.kind==="buyer"){
+    const b=state.buyers.find(x=>x.id===drawer.id); if(!b)return null;
+    title=b.name; color="var(--amber)";
+    const os=state.orders.filter(o=>o.buyerId===b.id);
+    body=<>
+      <dl className="kv">
+        <dt>Group</dt><dd><span className="tag">{b.group}</span>{b.mergedParent&&<span className="tag" style={{marginLeft:6}}>merged parent</span>}</dd>
+        <dt>Billing</dt><dd>{b.billingAddress||"—"}</dd>
+        <dt>Contact</dt><dd>{b.contactName||"—"}{b.contactEmail?<><br/><span className="mono muted">{b.contactEmail}</span></>:""}</dd>
+        <dt>Terms</dt><dd>{b.paymentTerms||"—"} · {b.paymentMethod||"—"}</dd>
+        <dt>Deductions</dt><dd>{b.deductionModel}{b.standardDeductions?" — "+b.standardDeductions:""}</dd>
+        <dt>Destruction</dt><dd>{b.destruction? <span className="mono">signed {b.destruction}</span> : <span className="warnrow">NONE on file — do not ship FedEx/Walmart</span>}</dd>
+        <dt>REMA member</dt><dd>{b.remaMember?"Yes":"No"}</dd>
+      </dl>
+      {b.notes&&<div className="banner"><b>Kim's notes:</b><div style={{whiteSpace:"pre-wrap"}}>{b.notes}</div></div>}
+      <b className="cond">Sales orders ({os.length})</b>
+      {os.length? os.map(o=><div key={o.id} className="mono" style={{fontSize:12,padding:"3px 0"}}>{o.id} · {o.customerReference} · item {o.itemCode}</div>) : <div className="muted">None yet.</div>}
+    </>;
+  } else {
+    const o=state.orders.find(x=>x.id===drawer.id); if(!o)return null;
+    title=o.id; color="var(--st-sold)";
+    const b=state.buyers.find(x=>x.id===o.buyerId);
+    const units=state.units.filter(u=>u.salesOrderId===o.id);
+    body=<>
+      <dl className="kv">
+        <dt>Buyer</dt><dd>{b?b.name:"—"}</dd>
+        <dt>Customer ref</dt><dd><span className="tag">{o.customerReference||"—"}</span></dd>
+        <dt>Item code</dt><dd className="mono">{o.itemCode||"—"}</dd>
+        <dt>Price</dt><dd>{o.price!=null?"$"+o.price+" "+o.priceType:"—"}</dd>
+        <dt>Ref weight</dt><dd>{o.refWeight?o.refWeight.toLocaleString()+" lb (Catherine's flag)":"—"}</dd>
+        <dt>Created</dt><dd className="mono">{o.createdDate}</dd>
+      </dl>
+      {o.headerNotes&&<div className="banner"><b>Header note:</b> {o.headerNotes}</div>}
+      <b className="cond">Attached units ({units.length})</b>
+      {units.length? <table style={{marginTop:6}}><tbody>{units.map(u=><tr key={u.id}><td><span className="ticket">{u.id}</span></td><td>{u.unitNumber}</td><td><Pill status={u.status}/></td></tr>)}</tbody></table> : <div className="muted">None attached yet.</div>}
+    </>;
+  }
+  return <div className="drawer-wrap" onClick={close}>
+    <div className="drawer" onClick={e=>e.stopPropagation()}>
+      <div className="dhead" style={{borderTopColor:color}}>
+        <div><h3>{title}</h3><div className="muted" style={{fontSize:12,textTransform:"uppercase",letterSpacing:".08em"}}>{drawer.kind}</div></div>
+        <button className="x" onClick={close}>×</button>
+      </div>
+      <div className="dbody">{body}</div>
+    </div>
+  </div>;
+}
+
+const EXAMPLES=[
+  "Create a new buyer: Ferrous Northwest, in Portland OR, standard deductions (wood floor 2000 lb), Net 30 ACH, REMA member. Contact Dana at dana@fnw.example.",
+  "Create an AUG 26 sales order for SA Recycling, item 7010, 17 cents per lb, ref weight 8500. Header note: no deductions per email.",
+  "Attach both FedEx drop frame pups that are Ready to SA Recycling's AUG 26 order.",
+  "Which buyers have no destruction agreement on file?",
+  "Mark the Hub Group container in Ready as dispatched with hauler Nashville Heavy Haul.",
+];
+
+function Assistant({state,setState}){
+  const [log,setLog]=useState(state.chat&&state.chat.length?state.chat:[{role:"bot",text:"Hey — I'm your ops assistant. Tell me in plain English what you need: create a buyer, build a sales order, attach units to it, move units through the pipeline, or ask a question about what's in the system. To load a purchase list, drop it into the bid-sheet importer below.",did:null}]);
+  const [input,setInput]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [paste,setPaste]=useState("");
+  const [err,setErr]=useState("");
+  const endRef=useRef(null);
+  useEffect(()=>{endRef.current&&endRef.current.scrollIntoView({behavior:"smooth"});},[log,busy]);
+
+  const persistChat=(next)=>{ setState(s=>({...s,chat:next.slice(-40)})); };
+
+  async function send(text){
+    const t=(text||input).trim(); if(!t||busy) return;
+    setErr(""); setInput("");
+    const next=[...log,{role:"user",text:t}]; setLog(next); persistChat(next);
+    setBusy(true);
+    try{
+      const sys=buildSystem(state);
+      const raw=await callAI(sys,t);
+      const parsed=extractJSON(raw);
+      if(!parsed){ const n=[...next,{role:"bot",text:"I couldn't parse that into an action — try rephrasing, or be a bit more specific about the buyer/order/units."}]; setLog(n);persistChat(n); setBusy(false); return; }
+      let logLines=[];
+      if(parsed.actions&&parsed.actions.length){
+        const {state:ns,log:ll}=applyActions(state,parsed.actions);
+        logLines=ll; setState(prev=>({...ns,chat:prev.chat}));
+      }
+      const n=[...next,{role:"bot",text:parsed.reply||"Done.",did:logLines}];
+      setLog(n); persistChat(n);
+    }catch(e){
+      const n=[...next,{role:"bot",text:"Something went wrong reaching the assistant model ("+e.message+"). The bid-sheet importer below still works without it."}];
+      setLog(n);persistChat(n);
+    }
+    setBusy(false);
+  }
+
+  function runImport(){
+    setErr("");
+    const {units,error}=parseBidSheet(paste);
+    if(error){setErr(error);return;}
+    // default source guess
+    const withSrc=units.map(u=>({...u,source:"Walmart",equipmentType:"Long Straight Rail",status:"Purchase — Not Ready"}));
+    const {state:ns,log}=applyActions(state,[{type:"add_units",units:withSrc}]);
+    setState(prev=>({...ns,chat:prev.chat}));
+    const line={role:"bot",text:"Imported "+units.length+" unit"+(units.length!==1?"s":"")+" from the bid sheet as Walmart · Long Straight Rail · Purchase — Not Ready. Open Inventory to review — adjust any 45-ft all-steel units.",did:log};
+    const merged=[...log,line];
+    setLog(merged); persistChat(merged);
+    setPaste("");
+  }
+
+  return <div className="asst">
+    <div className="chatlog">
+      {log.map((m,i)=><div key={i} className={"msg "+(m.role==="user"?"user":"bot")}>
+        <div className="who cond">{m.role==="user"?"You":"MRC"}</div>
+        <div className="bubble">
+          <div style={{whiteSpace:"pre-wrap"}}>{m.text}</div>
+          {m.did&&m.did.length>0&&<div className="did"><b>Done</b><ul>{m.did.map((d,j)=><li key={j}>{d}</li>)}</ul></div>}
+        </div>
+      </div>)}
+      {busy&&<div className="msg bot"><div className="who cond">MRC</div><div className="bubble muted">working…</div></div>}
+      <div ref={endRef}></div>
+    </div>
+    <div className="composer">
+      <textarea value={input} onChange={e=>setInput(e.target.value)} placeholder="e.g. Create an AUG 26 order for SA Recycling at 17¢/lb, then attach the two Ready FedEx pups…"
+        onKeyDown={e=>{if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)){e.preventDefault();send();}}}/>
+      <div className="row">
+        <button className="btn" disabled={busy||!input.trim()} onClick={()=>send()}>Send</button>
+        <span className="hint">⌘/Ctrl + Enter</span>
+      </div>
+      <div className="prompts">{EXAMPLES.map((p,i)=><button key={i} onClick={()=>send(p)} disabled={busy}>{p.length>52?p.slice(0,52)+"…":p}</button>)}</div>
+      <details className="import">
+        <summary>Import a purchase / bid sheet</summary>
+        <div className="ibody">
+          <p className="hint" style={{margin:"4px 0 8px"}}>Paste rows straight from Excel (tab-separated). It looks for a header with <b>Unit</b> and <b>Vin</b>, then maps Unit&nbsp;# · VIN · Pickup Location · Pickup Address · Comments · MRC(price). Imports as Walmart, Purchase — Not Ready.</p>
+          <textarea value={paste} onChange={e=>setPaste(e.target.value)} placeholder={"Unit #\tVin\tPickup Location\tPickup Address\tComments\tMRC\n61457\t1PNV...\t3530\t850 W Rusk St, Rockwall, TX\tTires worn but ok\t1033"}/>
+          {err&&<div className="warnrow" style={{margin:"6px 0"}}>⚠︎ {err}</div>}
+          <div className="row"><button className="btn sm" disabled={!paste.trim()} onClick={runImport}>Parse &amp; add units</button></div>
+        </div>
+      </details>
+    </div>
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
