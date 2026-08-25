@@ -69,9 +69,18 @@ async function setup() {
 
 async function signedInClient(email) {
   const c = createClient(URL, ANON, { auth: { persistSession: false } })
-  const { error } = await c.auth.signInWithPassword({ email, password: PASSWORD })
-  if (error) throw new Error(`sign-in ${email}: ${error.message}`)
-  return c
+  // The suite performs ~20 sign-ins per run; back off and retry when
+  // Supabase Auth rate-limits instead of failing the whole run.
+  for (let attempt = 0; ; attempt++) {
+    const { error } = await c.auth.signInWithPassword({ email, password: PASSWORD })
+    if (!error) return c
+    if (/rate limit/i.test(error.message) && attempt < 5) {
+      console.log(`  … auth rate-limited, waiting 25s (retry ${attempt + 1}/5)`)
+      await new Promise((r) => setTimeout(r, 25000))
+      continue
+    }
+    throw new Error(`sign-in ${email}: ${error.message}`)
+  }
 }
 
 async function testBankingVisibility() {
@@ -176,9 +185,16 @@ async function testInvoicePolicies() {
   check(!!se, 'sales CANNOT create an invoice')
   const { data: upd } = await sales.from('invoices').update({ open: false }).eq('id', v?.id ?? -1).select()
   check((upd?.length ?? 0) === 0, 'sales CANNOT mark an invoice paid')
+  const { data: disp } = await sales.from('invoices').update({ disputed: true }).eq('id', v?.id ?? -1).select()
+  check((disp?.length ?? 0) === 0, 'sales CANNOT flag a dispute (Katherine/admin only)')
   const { data: read } = await sales.from('invoices').select('id').eq('invoice_number', 'INV-RLS-TEST')
   check((read?.length ?? 0) === 1, 'sales can read invoices (division read)')
+  const { data: { user: salesU } } = await sales.auth.getUser()
+  const { error: ne } = await sales.from('notes')
+    .insert({ entity_type: 'invoice', entity_id: v?.id ?? -1, note_text: 'collection: left voicemail', author: salesU.id })
+  check(!ne, `sales CAN log collection notes on an invoice${ne ? ' (err: ' + ne.message + ')' : ''}`)
   await sales.auth.signOut()
+  if (v?.id) await admin.from('notes').delete().eq('entity_type', 'invoice').eq('entity_id', v.id)
 
   if (v?.id) await admin.from('invoices').delete().eq('id', v.id)
 }

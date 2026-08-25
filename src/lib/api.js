@@ -59,6 +59,7 @@ export async function fetchAll() {
       id, legacy_invoice_id, invoice_number, invoice_date, due_date, terms,
       amount, open, paid_date, paid_amount, payment_method, payment_ref,
       notes, voided, created_at,
+      disputed, dispute_reason, dispute_amount, disputed_at, dispute_resolved_at,
       buyer:parties ( id, name ),
       units ( count )
     `).eq('voided', false).order('id', { ascending: false }).limit(10000),
@@ -326,8 +327,34 @@ export async function assignUnitsToInvoice(invoiceId, unitIds) {
 }
 
 export async function markInvoicePaid(id, { paid_date, paid_amount, payment_method, payment_ref }) {
+  // Payment received closes the invoice and clears any standing dispute
+  // (the flag history stays: disputed_at/dispute_resolved_at remain set).
   const { error } = await supabase.from('invoices')
-    .update({ open: false, paid_date, paid_amount, payment_method, payment_ref })
+    .update({
+      open: false, paid_date, paid_amount, payment_method, payment_ref,
+      disputed: false, dispute_resolved_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+  if (error) throw error
+}
+
+// Katherine flags a payment/deduction discrepancy; TJ works the collection
+// (his legwork goes in as ordinary invoice notes). Accounting/admin only.
+export async function flagInvoiceDispute(id, { dispute_reason, dispute_amount }) {
+  const { data: { user } } = await supabase.auth.getUser()
+  const { error } = await supabase.from('invoices')
+    .update({
+      disputed: true, dispute_reason, dispute_amount,
+      disputed_at: new Date().toISOString(), disputed_by: user?.id,
+      dispute_resolved_at: null,
+    })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function resolveInvoiceDispute(id) {
+  const { error } = await supabase.from('invoices')
+    .update({ disputed: false, dispute_resolved_at: new Date().toISOString() })
     .eq('id', id)
   if (error) throw error
 }

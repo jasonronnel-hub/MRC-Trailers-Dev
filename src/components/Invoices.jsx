@@ -4,7 +4,9 @@ import Pill from './Pill'
 import {
   can, saveInvoice, nextInvoiceNumber, fetchInvoiceUnits,
   assignUnitsToInvoice, markInvoicePaid, fetchUnitsPage, suggestedUnitAmount,
+  flagInvoiceDispute, resolveInvoiceDispute,
 } from '../lib/api'
+import { useNotes, PopupBanners, NotesList } from './Notes'
 
 const money = (n) => n == null ? '—' : `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
 
@@ -18,12 +20,15 @@ export default function Invoices({ data, role, refresh }) {
   const [formInv, setFormInv] = useState(null)        // null | 'new' | invoice
   const [attachInv, setAttachInv] = useState(null)
   const [payInv, setPayInv] = useState(null)
+  const [disputeInv, setDisputeInv] = useState(null)
 
   const writable = can(role, 'editInvoice')
-  const saved = () => { setFormInv(null); setAttachInv(null); setPayInv(null); setDrawerInv(null); refresh() }
+  const saved = () => { setFormInv(null); setAttachInv(null); setPayInv(null); setDisputeInv(null); setDrawerInv(null); refresh() }
+  const disputedCount = invoices.filter((i) => i.disputed).length
 
   let rows = invoices
   if (view === 'open') rows = rows.filter((i) => i.open)
+  if (view === 'disputed') rows = rows.filter((i) => i.disputed)
   if (view === 'paid') rows = rows.filter((i) => !i.open)
   if (q.trim()) {
     const needle = q.trim().toLowerCase()
@@ -45,7 +50,7 @@ export default function Invoices({ data, role, refresh }) {
       <div className="filters">
         <input className="search" placeholder="Search invoice #, buyer, payment ref…"
           value={q} onChange={(e) => setQ(e.target.value)} />
-        {[['open', 'Open'], ['paid', 'Paid'], ['all', 'All']].map(([k, label]) => (
+        {[['open', 'Open'], ['disputed', `Disputed${disputedCount ? ` (${disputedCount})` : ''}`], ['paid', 'Paid'], ['all', 'All']].map(([k, label]) => (
           <span key={k} className={'chip' + (view === k ? ' on' : '')} onClick={() => setView(k)}>{label}</span>
         ))}
         <span className="muted" style={{ fontSize: 12.5 }}>{rows.length.toLocaleString()} shown</span>
@@ -69,9 +74,11 @@ export default function Invoices({ data, role, refresh }) {
                   <td>{money(i.amount)}</td>
                   <td>{i.units?.[0]?.count ?? 0}</td>
                   <td>
-                    {i.open
-                      ? <span className="pill copper"><span className="dot" />Open</span>
-                      : <span className="pill"><span className="dot" />Paid</span>}
+                    {i.disputed
+                      ? <span className="pill error"><span className="dot" />Disputed</span>
+                      : i.open
+                        ? <span className="pill copper"><span className="dot" />Open</span>
+                        : <span className="pill"><span className="dot" />Paid</span>}
                   </td>
                   <td className="muted" style={{ fontSize: 12.5 }}>
                     {i.open ? (i.due_date ? `due ${i.due_date}` : '—')
@@ -87,11 +94,13 @@ export default function Invoices({ data, role, refresh }) {
       )}
 
       {drawerInv && (
-        <InvoiceDrawer invoice={drawerInv} writable={writable}
+        <InvoiceDrawer invoice={drawerInv} writable={writable} role={role}
           close={() => setDrawerInv(null)}
           onEdit={() => setFormInv(drawerInv)}
           onAttach={() => setAttachInv(drawerInv)}
-          onPay={() => setPayInv(drawerInv)} />
+          onPay={() => setPayInv(drawerInv)}
+          onDispute={() => setDisputeInv(drawerInv)}
+          onResolve={async () => { await resolveInvoiceDispute(drawerInv.id); saved() }} />
       )}
       {formInv && (
         <InvoiceForm invoice={formInv === 'new' ? null : formInv} invoices={invoices}
@@ -102,12 +111,14 @@ export default function Invoices({ data, role, refresh }) {
           close={() => setAttachInv(null)} onSaved={saved} />
       )}
       {payInv && <MarkPaidModal invoice={payInv} close={() => setPayInv(null)} onSaved={saved} />}
+      {disputeInv && <DisputeModal invoice={disputeInv} close={() => setDisputeInv(null)} onSaved={saved} />}
     </div>
   )
 }
 
-function InvoiceDrawer({ invoice: i, writable, close, onEdit, onAttach, onPay }) {
+function InvoiceDrawer({ invoice: i, writable, role, close, onEdit, onAttach, onPay, onDispute, onResolve }) {
   const [units, setUnits] = useState(null)
+  const notesState = useNotes('invoice', i.id)
   useEffect(() => { fetchInvoiceUnits(i.id).then(setUnits).catch(() => setUnits([])) }, [i.id])
 
   const suggested = (units || []).reduce((s, u) => s + (suggestedUnitAmount(u) ?? 0), 0)
@@ -134,16 +145,27 @@ function InvoiceDrawer({ invoice: i, writable, close, onEdit, onAttach, onPay })
         <div className="dhead">
           <div>
             <h3 className="mono">{i.invoice_number}</h3>
-            <div className="kind">Invoice · {i.open ? 'OPEN — money not received' : 'paid'}</div>
+            <div className="kind">Invoice · {i.disputed ? 'DISPUTED' : i.open ? 'OPEN — money not received' : 'paid'}</div>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             {writable && i.open && <button className="btn sm" onClick={onPay}>Mark paid</button>}
+            {writable && !i.disputed && i.open && <button className="btn ghost sm" onClick={onDispute}>Flag dispute…</button>}
+            {writable && i.disputed && <button className="btn ghost sm" onClick={onResolve}>Resolve dispute</button>}
             {writable && i.open && <button className="btn ghost sm" onClick={onAttach}>Attach units</button>}
             {writable && <button className="btn ghost sm" onClick={onEdit}>Edit</button>}
             <button className="x" onClick={close} aria-label="Close" style={{ marginLeft: 0 }}>×</button>
           </div>
         </div>
         <div className="dbody">
+          {i.disputed && (
+            <div className="banner" style={{ background: 'var(--error-tint)', borderColor: 'rgba(179,64,47,0.35)', borderLeftColor: 'var(--error)' }}>
+              <b>⚑ Disputed{i.disputed_at ? ` since ${i.disputed_at.slice(0, 10)}` : ''}:</b>{' '}
+              {i.dispute_reason || 'no reason recorded'}
+              {i.dispute_amount != null && <> — shortfall {money(i.dispute_amount)}</>}
+              <div style={{ fontSize: 12, marginTop: 4 }}>TJ works the collection; log progress in the notes below.</div>
+            </div>
+          )}
+          <PopupBanners popups={notesState.popups} />
           <dl className="kv">
             <dt>Buyer</dt><dd>{i.buyer?.name || '—'}</dd>
             <dt>Invoice date</dt><dd className="mono">{i.invoice_date || '—'}</dd>
@@ -186,9 +208,58 @@ function InvoiceDrawer({ invoice: i, writable, close, onEdit, onAttach, onPay })
           ) : (
             <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>None attached yet.</div>
           )}
+
+          <NotesList entityType="invoice" entityId={i.id} notesState={notesState} role={role} />
         </div>
       </div>
     </div>
+  )
+}
+
+// Katherine flags the discrepancy; the reason + shortfall become TJ's
+// collection brief.
+function DisputeModal({ invoice, close, onSaved }) {
+  const [reason, setReason] = useState('')
+  const [amount, setAmount] = useState('')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setBusy(true); setErr('')
+    try {
+      await flagInvoiceDispute(invoice.id, {
+        dispute_reason: reason.trim(),
+        dispute_amount: amount === '' ? null : Number(amount),
+      })
+      onSaved()
+    } catch (ex) { setErr(ex.message); setBusy(false) }
+  }
+
+  return (
+    <Modal title={`Flag dispute on ${invoice.invoice_number}`} close={close}>
+      <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
+        Use this when the buyer’s payment doesn’t match the deductions agreed in
+        advance. The invoice shows as <b>Disputed</b> until resolved or paid;
+        TJ picks up the collection effort from the Disputed list.
+      </p>
+      {err && <div className="auth-err">{err}</div>}
+      <form onSubmit={submit}>
+        <div className="field">
+          <label>What’s wrong? *</label>
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)} required autoFocus
+            placeholder="e.g. Took a 2,000 lb wood-floor deduction — this buyer is no-deductions per SO header" />
+        </div>
+        <div className="field">
+          <label>Shortfall amount ($, if known)</label>
+          <input type="number" step="any" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        </div>
+        <div className="form-actions">
+          <button type="button" className="btn ghost" onClick={close}>Cancel</button>
+          <button className="btn" disabled={busy || !reason.trim()}>{busy ? 'Flagging…' : 'Flag dispute'}</button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 
