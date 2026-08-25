@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import Pill from './Pill'
 import UnitDrawer from './UnitDrawer'
 import UnitForm from './UnitForm'
+import ImportModal from './ImportModal'
 import { statusMeta } from '../lib/statuses'
 import { can } from '../lib/api'
 
@@ -11,6 +12,8 @@ export default function Inventory({ data, role, refresh, statusFilter, setStatus
   const [q, setQ] = useState('')
   const [drawerUnit, setDrawerUnit] = useState(null)
   const [formUnit, setFormUnit] = useState(null)      // null = closed, 'new' = create, object = edit
+  const [importing, setImporting] = useState(false)
+  const [notice, setNotice] = useState('')
 
   const sources = useMemo(
     () => [...new Set(units.map((u) => u.source?.name).filter(Boolean))].sort(),
@@ -39,9 +42,14 @@ export default function Inventory({ data, role, refresh, statusFilter, setStatus
         <h2>Inventory</h2>
         <span className="sub">{rows.length} of {units.length} broker weight tickets</span>
         {can(role, 'createUnit') && (
-          <button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => setFormUnit('new')}>+ New unit</button>
+          <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <button className="btn ghost sm" onClick={() => setImporting(true)}>Import bid sheet</button>
+            <button className="btn sm" onClick={() => setFormUnit('new')}>+ New unit</button>
+          </span>
         )}
       </div>
+
+      {notice && <div className="banner" style={{ marginBottom: 12 }}>{notice}</div>}
 
       <div className="filters">
         <input className="search" placeholder="Search unit #, VIN, location…"
@@ -100,6 +108,15 @@ export default function Inventory({ data, role, refresh, statusFilter, setStatus
         <UnitForm unit={formUnit === 'new' ? null : formUnit}
           statuses={statuses} equipTypes={equipTypes} titleTypes={titleTypes} parties={parties}
           close={() => setFormUnit(null)} onSaved={saved} />
+      )}
+      {importing && (
+        <ImportModal parties={parties} equipTypes={equipTypes} units={units}
+          close={() => setImporting(false)}
+          onSaved={(n) => {
+            setImporting(false)
+            setNotice(`Imported ${n} unit${n === 1 ? '' : 's'} as Purchased Not Ready — review types and prices, especially 45-ft all-steel units.`)
+            refresh()
+          }} />
       )}
     </div>
   )
