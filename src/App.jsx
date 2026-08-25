@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
-import { fetchInventory, fetchMyRole } from './lib/api'
+import { fetchAll, fetchMyRole } from './lib/api'
 import { SignIn, MfaVerify, MfaEnroll, NoRole } from './components/Login'
 import Logo from './components/Logo'
 import PipelineRail from './components/PipelineRail'
 import Inventory from './components/Inventory'
 import UnitDrawer from './components/UnitDrawer'
+import Buyers from './components/Buyers'
+import Orders from './components/Orders'
 
 const MFA_REQUIRED_ROLES = ['admin', 'accounting'] // Spec §5.1
 
@@ -63,13 +65,14 @@ function Shell({ role, email }) {
   const [drawerUnit, setDrawerUnit] = useState(null)
 
   useEffect(() => {
-    fetchInventory().then(setData).catch((e) => setErr(e.message))
+    fetchAll().then(setData).catch((e) => setErr(e.message))
   }, [])
 
-  if (err) return <div className="auth-wrap"><div className="auth-err">Couldn’t load inventory: {err}</div></div>
-  if (!data) return <div className="auth-wrap"><span className="muted">Loading inventory…</span></div>
+  if (err) return <div className="auth-wrap"><div className="auth-err">Couldn’t load data: {err}</div></div>
+  if (!data) return <div className="auth-wrap"><span className="muted">Loading…</span></div>
 
-  const { statuses, units } = data
+  const { statuses, units, parties, orders } = data
+  const buyerCount = parties.filter((p) => p.group?.name === 'Trailer Buyer').length
 
   return (
     <>
@@ -89,8 +92,8 @@ function Shell({ role, email }) {
         <div className="nav">
           {[
             ['inventory', 'Inventory', units.length],
-            ['buyers', 'Buyers', null],
-            ['orders', 'Sales Orders', null],
+            ['buyers', 'Buyers', buyerCount],
+            ['orders', 'Sales Orders', orders.length],
           ].map(([k, label, n]) => (
             <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>
               <span className="txt">{label}</span>
@@ -105,8 +108,8 @@ function Shell({ role, email }) {
               statusFilter={statusFilter} setStatusFilter={setStatusFilter}
               onOpen={setDrawerUnit} />
           )}
-          {tab === 'buyers' && <div className="empty">Buyers screen is next on the build plan (Spec §5.3).</div>}
-          {tab === 'orders' && <div className="empty">Sales Orders screen is next on the build plan (Spec §5.4).</div>}
+          {tab === 'buyers' && <Buyers parties={parties} orders={orders} />}
+          {tab === 'orders' && <Orders orders={orders} />}
         </div>
       </div>
 
