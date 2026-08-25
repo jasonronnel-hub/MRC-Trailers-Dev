@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Pill from './Pill'
 import UnitDrawer from './UnitDrawer'
 import UnitForm from './UnitForm'
+import WeightsModal from './WeightsModal'
 import ImportModal from './ImportModal'
 import SearchSelect from './SearchSelect'
 import { statusMeta } from '../lib/statuses'
@@ -33,6 +34,7 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
   const [err, setErr] = useState('')
   const [drawerUnit, setDrawerUnit] = useState(null)
   const [formUnit, setFormUnit] = useState(null)
+  const [weightsUnit, setWeightsUnit] = useState(null)
   const [importing, setImporting] = useState(false)
   const [notice, setNotice] = useState('')
 
@@ -201,7 +203,13 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
 
       {drawerUnit && (
         <UnitDrawer unit={drawerUnit} statuses={statuses} role={role} close={() => setDrawerUnit(null)}
-          onEdit={can(role, 'editUnit') ? () => setFormUnit(drawerUnit) : null} />
+          onEdit={can(role, 'editUnit') ? () => setFormUnit(drawerUnit) : null}
+          onWeights={can(role, 'editUnit') ? () => setWeightsUnit(drawerUnit) : null} />
+      )}
+      {weightsUnit && (
+        <WeightsModal unit={weightsUnit}
+          close={() => setWeightsUnit(null)}
+          onSaved={() => { setWeightsUnit(null); setDrawerUnit(null); refresh() }} />
       )}
       {formUnit && (
         <UnitForm unit={formUnit === 'new' ? null : formUnit}

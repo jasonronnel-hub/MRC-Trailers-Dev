@@ -8,6 +8,7 @@ import {
 } from '../lib/api'
 import { useNotes, PopupBanners, NotesList } from './Notes'
 import SearchSelect from './SearchSelect'
+import WeightsModal from './WeightsModal'
 
 const money = (n) => n == null ? '—' : `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
 
@@ -119,8 +120,10 @@ export default function Invoices({ data, role, refresh }) {
 
 function InvoiceDrawer({ invoice: i, writable, role, close, onEdit, onAttach, onPay, onDispute, onResolve }) {
   const [units, setUnits] = useState(null)
+  const [weightsUnit, setWeightsUnit] = useState(null)
   const notesState = useNotes('invoice', i.id)
-  useEffect(() => { fetchInvoiceUnits(i.id).then(setUnits).catch(() => setUnits([])) }, [i.id])
+  const loadUnits = () => fetchInvoiceUnits(i.id).then(setUnits).catch(() => setUnits([]))
+  useEffect(() => { loadUnits() }, [i.id])   // eslint-disable-line react-hooks/exhaustive-deps
 
   const suggested = (units || []).reduce((s, u) => s + (suggestedUnitAmount(u) ?? 0), 0)
 
@@ -201,6 +204,11 @@ function InvoiceDrawer({ invoice: i, writable, role, close, onEdit, onAttach, on
                       <td>{u.unit_number || '—'}</td>
                       <td className="muted">{u.confirmed_net ?? u.net_wt ?? '—'}{(u.confirmed_net ?? u.net_wt) != null ? ' lb' : ''}</td>
                       <td><Pill status={u.status?.name} /></td>
+                      <td>
+                        {writable && (
+                          <button className="btn ghost sm" onClick={() => setWeightsUnit(u)}>Weights</button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -213,6 +221,11 @@ function InvoiceDrawer({ invoice: i, writable, role, close, onEdit, onAttach, on
           <NotesList entityType="invoice" entityId={i.id} notesState={notesState} role={role} />
         </div>
       </div>
+      {weightsUnit && (
+        <WeightsModal unit={weightsUnit}
+          close={() => setWeightsUnit(null)}
+          onSaved={() => { setWeightsUnit(null); loadUnits() }} />
+      )}
     </div>
   )
 }

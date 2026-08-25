@@ -27,7 +27,7 @@ function StatusHistory({ unitId, statuses }) {
   )
 }
 
-export default function UnitDrawer({ unit, statuses, role, close, onEdit }) {
+export default function UnitDrawer({ unit, statuses, role, close, onEdit, onWeights }) {
   const notesState = useNotes('unit', unit?.id)
   if (!unit) return null
   return (
@@ -38,8 +38,11 @@ export default function UnitDrawer({ unit, statuses, role, close, onEdit }) {
             <h3>{unit.unit_number || `W${unit.legacy_bwt_id ?? unit.id}`}</h3>
             <div className="kind">Unit · broker weight ticket</div>
           </div>
-          {onEdit && <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={onEdit}>Edit</button>}
-          <button className="x" onClick={close} aria-label="Close" style={onEdit ? { marginLeft: 0 } : undefined}>×</button>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            {onWeights && <button className="btn ghost sm" onClick={onWeights}>Weights…</button>}
+            {onEdit && <button className="btn ghost sm" onClick={onEdit}>Edit</button>}
+            <button className="x" onClick={close} aria-label="Close" style={{ marginLeft: 0 }}>×</button>
+          </div>
         </div>
         <div className="dbody">
           <div style={{ marginBottom: 14 }}><Pill status={unit.status?.name} /></div>
