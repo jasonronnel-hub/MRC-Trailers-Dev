@@ -60,11 +60,43 @@ export async function saveOrder(fields, id) {
   if (error) throw error
 }
 
+export const nextOrderNumber = (orders) => {
+  const max = orders.reduce((m, o) => {
+    const n = parseInt((o.order_number || '').replace(/^SO-/, ''), 10)
+    return Number.isFinite(n) && n > m ? n : m
+  }, 1040)
+  return `SO-${max + 1}`
+}
+
 export async function saveUnit(fields, id) {
   const q = id
     ? supabase.from('units').update(fields).eq('id', id)
     : supabase.from('units').insert(fields)
   const { error } = await q
+  if (error) throw error
+}
+
+// Bulk unit creation (e.g. the assistant adding several units from one
+// message). Each row goes through the normal units table defaults/RLS.
+export async function addUnits(rows) {
+  if (!rows.length) return
+  const { error } = await supabase.from('units').insert(rows)
+  if (error) throw error
+}
+
+// Status change over an EXPLICIT id list, resolved server-side from a
+// structured selector at apply time — never "whatever the view shows"
+// (Spec §2.6). The audit trigger logs the change regardless of cause.
+export async function setUnitsStatus(unitIds, statusId) {
+  if (!unitIds.length) return
+  const { error } = await supabase.from('units').update({ status_id: statusId }).in('id', unitIds)
+  if (error) throw error
+}
+
+export async function addNote(entityType, entityId, text) {
+  const { data: { user } } = await supabase.auth.getUser()
+  const { error } = await supabase.from('notes')
+    .insert({ entity_type: entityType, entity_id: entityId, note_text: text, author: user?.id })
   if (error) throw error
 }
 
@@ -89,6 +121,7 @@ const CAN = {
   attachUnits: ['sales', 'admin'],
   createUnit: ['office', 'sales', 'logistics', 'admin'],
   editUnit: ['sales', 'logistics', 'accounting', 'admin'],
+  addNote: ['office', 'sales', 'logistics', 'accounting', 'admin'],
 }
 export const can = (role, action) => (CAN[action] || []).includes(role)
 

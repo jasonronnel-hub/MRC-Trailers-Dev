@@ -7,6 +7,7 @@ import PipelineRail from './components/PipelineRail'
 import Inventory from './components/Inventory'
 import Buyers from './components/Buyers'
 import Orders from './components/Orders'
+import Assistant from './components/Assistant'
 
 const MFA_REQUIRED_ROLES = ['admin', 'accounting'] // Spec §5.1
 
@@ -95,6 +96,7 @@ function Shell({ role, email }) {
             ['inventory', 'Inventory', units.length],
             ['buyers', 'Buyers', buyerCount],
             ['orders', 'Sales Orders', orders.length],
+            ['assistant', 'Assistant', null],
           ].map(([k, label, n]) => (
             <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>
               <span className="txt">{label}</span>
@@ -109,6 +111,7 @@ function Shell({ role, email }) {
           )}
           {tab === 'buyers' && <Buyers {...screenProps} />}
           {tab === 'orders' && <Orders {...screenProps} />}
+          {tab === 'assistant' && <Assistant {...screenProps} />}
         </div>
       </div>
     </>

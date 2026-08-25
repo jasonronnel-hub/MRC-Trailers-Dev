@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import Modal from './Modal'
-import { saveOrder } from '../lib/api'
+import { saveOrder, nextOrderNumber } from '../lib/api'
 
 // Customer reference must follow the 'AUG 26' convention (Spec §2.4: enforce
 // format in UI). Blank is allowed; anything else must be MMM YY.
@@ -9,14 +9,6 @@ const defaultRef = () => {
   const d = new Date()
   const mon = d.toLocaleString('en-US', { month: 'short' }).toUpperCase()
   return `${mon} ${String(d.getFullYear()).slice(2)}`
-}
-
-const nextOrderNumber = (orders) => {
-  const max = orders.reduce((m, o) => {
-    const n = parseInt((o.order_number || '').replace(/^SO-/, ''), 10)
-    return Number.isFinite(n) && n > m ? n : m
-  }, 1040)
-  return `SO-${max + 1}`
 }
 
 export default function OrderForm({ order, orders, parties, equipTypes, close, onSaved }) {

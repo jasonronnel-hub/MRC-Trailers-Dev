@@ -288,6 +288,39 @@ tbody tr:hover td { background: var(--panel); cursor: pointer; }
 .attach-row:hover { background: var(--panel); }
 .attach-row input { accent-color: var(--copper); width: 15px; height: 15px; flex: none; }
 
+/* ---------- assistant ---------- */
+.asst { display: flex; flex-direction: column; height: 100%; max-width: 760px; }
+.chatlog { flex: 1; overflow: auto; padding: 4px 2px; }
+.msg { margin: 12px 0; display: flex; gap: 10px; }
+.msg .who {
+  width: 28px; height: 28px; flex: none; border-radius: 6px;
+  display: grid; place-items: center; font-weight: 700; font-size: 12px; color: #fff;
+}
+.msg.user .who { background: var(--ink); }
+.msg.bot .who { background: var(--copper); }
+.msg .bubble {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 13px; max-width: 560px; font-size: 13.5px;
+}
+.msg.user .bubble { background: var(--paper); }
+.did { margin-top: 8px; font-size: 12px; border-top: 1px dashed var(--line); padding-top: 7px; }
+.did b { text-transform: uppercase; letter-spacing: 0.04em; font-size: 10.5px; color: var(--copper-deep); }
+.did ul { margin: 4px 0 0; padding-left: 16px; }
+.composer { border-top: 1px solid var(--line); padding: 14px 2px 4px; }
+.composer textarea {
+  width: 100%; border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px; resize: vertical; min-height: 52px; background: var(--paper); font-size: 13.5px;
+}
+.composer textarea:focus { outline: 2px solid var(--copper-tint); border-color: var(--copper); }
+.composer .row { display: flex; gap: 10px; margin-top: 8px; align-items: center; flex-wrap: wrap; }
+.hint { font-size: 12px; color: var(--ink-soft); }
+.prompts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.prompts button {
+  font-size: 12px; border: 1px solid var(--line); background: var(--paper);
+  border-radius: 16px; padding: 5px 11px; color: var(--ink-soft);
+}
+.prompts button:hover { background: var(--panel); }
+
 @media (max-width: 820px) {
   .brand { min-width: 150px; }
   .nav { width: 56px; min-width: 56px; }
