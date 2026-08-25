@@ -254,6 +254,41 @@ export async function attachUnits(orderId, unitIds) {
   if (error) throw error
 }
 
+// ---- fleet snapshots (supplier fleet summaries — Selena's Friday report) ----
+
+export async function fetchSnapshots() {
+  const { data, error } = await supabase.from('fleet_snapshots')
+    .select('id, report_date, source_note, total_assets, created_at, supplier:parties ( id, name )')
+    .order('report_date', { ascending: false }).limit(500)
+  if (error) throw error
+  return data
+}
+
+export async function fetchSnapshotCells(snapshotId) {
+  const out = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase.from('fleet_snapshot_counts')
+      .select('equipment_label, model_year, n')
+      .eq('snapshot_id', snapshotId).range(from, from + 999)
+    if (error) throw error
+    out.push(...data)
+    if (data.length < 1000) return out
+  }
+}
+
+export async function saveSnapshot({ supplier_party_id, report_date, source_note, total_assets }, cells) {
+  const { data, error } = await supabase.from('fleet_snapshots')
+    .insert({ supplier_party_id, report_date, source_note, total_assets })
+    .select('id').single()
+  if (error) throw error
+  for (let i = 0; i < cells.length; i += 500) {
+    const chunk = cells.slice(i, i + 500).map((c) => ({ ...c, snapshot_id: data.id }))
+    const { error: ce } = await supabase.from('fleet_snapshot_counts').insert(chunk)
+    if (ce) throw ce
+  }
+  return data.id
+}
+
 // ---- invoices (Phase 3b strawman — provisional until Katherine's pass) ----
 
 export const nextInvoiceNumber = (invoices) => {
@@ -362,6 +397,7 @@ const CAN = {
   editDispatch: ['logistics', 'admin'],
   createInvoice: ['accounting', 'admin'],
   editInvoice: ['accounting', 'admin'],
+  importSnapshot: ['office', 'sales', 'admin'],
 }
 export const can = (role, action) => (CAN[action] || []).includes(role)
 

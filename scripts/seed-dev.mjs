@@ -18,7 +18,8 @@ const die = (label, error) => { if (error) { console.error(label + ':', error.me
 // ---- wipe (FK order) --------------------------------------------------------
 console.log('Wiping existing demo data…')
 const WIPE = [['notes', 'id'], ['status_log', 'id'], ['units', 'id'], ['dispatches', 'id'],
-  ['invoices', 'id'], ['sales_orders', 'id'], ['party_banking', 'party_id'],
+  ['invoices', 'id'], ['sales_orders', 'id'], ['fleet_snapshot_counts', 'id'],
+  ['fleet_snapshots', 'id'], ['party_banking', 'party_id'],
   ['party_contacts', 'id'], ['parties', 'id']]
 for (const [t, pk] of WIPE) {
   const { error } = await db.from(t).delete().neq(pk, -1)
