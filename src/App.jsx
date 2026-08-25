@@ -8,6 +8,7 @@ import Inventory from './components/Inventory'
 import Buyers from './components/Buyers'
 import Orders from './components/Orders'
 import Dispatch from './components/Dispatch'
+import Invoices from './components/Invoices'
 import TuesdayReport from './components/TuesdayReport'
 import Assistant from './components/Assistant'
 
@@ -104,6 +105,7 @@ function Shell({ role, email }) {
             ['buyers', 'Buyers', buyerCount],
             ['orders', 'Sales Orders', orders.length],
             ['dispatch', 'Dispatch', data.dispatches.length || null],
+            ['invoices', 'Invoices', data.invoices.filter((i) => i.open).length || null],
             ['tuesday', 'Tuesday Report', null],
             ['assistant', 'Assistant', null],
           ].map(([k, label, n]) => (
@@ -121,6 +123,7 @@ function Shell({ role, email }) {
           {tab === 'buyers' && <Buyers {...screenProps} />}
           {tab === 'orders' && <Orders {...screenProps} />}
           {tab === 'dispatch' && <Dispatch {...screenProps} />}
+          {tab === 'invoices' && <Invoices {...screenProps} />}
           {tab === 'tuesday' && <TuesdayReport {...screenProps} />}
           {tab === 'assistant' && <Assistant {...screenProps} />}
         </div>

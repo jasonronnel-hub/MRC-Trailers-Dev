@@ -149,6 +149,27 @@ async function testDispatchPolicies() {
   if (d?.id) await admin.from('dispatches').delete().eq('id', d.id)
 }
 
+async function testInvoicePolicies() {
+  console.log('\nInvoices (Spec §3: accounting/admin write; sales cannot; paid state guarded):')
+  const acct = await signedInClient('rls-test-accounting@mrc-test.invalid')
+  const { data: v, error } = await acct.from('invoices')
+    .insert({ invoice_number: 'INV-RLS-TEST', buyer_party_id: partyId, amount: 100, open: true }).select().single()
+  check(!error, `accounting can create an invoice${error ? ' (err: ' + error.message + ')' : ''}`)
+  await acct.auth.signOut()
+
+  const sales = await signedInClient('rls-test-sales@mrc-test.invalid')
+  const { error: se } = await sales.from('invoices')
+    .insert({ invoice_number: 'INV-RLS-NOPE', buyer_party_id: partyId })
+  check(!!se, 'sales CANNOT create an invoice')
+  const { data: upd } = await sales.from('invoices').update({ open: false }).eq('id', v?.id ?? -1).select()
+  check((upd?.length ?? 0) === 0, 'sales CANNOT mark an invoice paid')
+  const { data: read } = await sales.from('invoices').select('id').eq('invoice_number', 'INV-RLS-TEST')
+  check((read?.length ?? 0) === 1, 'sales can read invoices (division read)')
+  await sales.auth.signOut()
+
+  if (v?.id) await admin.from('invoices').delete().eq('id', v.id)
+}
+
 async function testStagingInvisibility() {
   console.log('\nStaging tables (raw ROM data — invisible to every app role):')
   await admin.from('staging_dealers').insert({ dealer_id: '-999999', company_name: 'RLS TEST ROW' })
@@ -194,6 +215,7 @@ async function cleanup() {
   if (unitId) await admin.from('status_log').delete().eq('unit_id', unitId)
   if (unitId) await admin.from('units').delete().eq('id', unitId)
   await admin.from('dispatches').delete().in('dispatch_number', ['D-RLS-TEST', 'D-RLS-NOPE'])
+  await admin.from('invoices').delete().in('invoice_number', ['INV-RLS-TEST', 'INV-RLS-NOPE'])
   if (soId) await admin.from('sales_orders').delete().eq('id', soId)
   if (partyId) {
     await admin.from('party_banking').delete().eq('party_id', partyId)
@@ -208,6 +230,7 @@ try {
   await testDivisionRead()
   await testStatusAutomation()
   await testDispatchPolicies()
+  await testInvoicePolicies()
   await testStagingInvisibility()
   await testNotesPolicies()
 } finally {

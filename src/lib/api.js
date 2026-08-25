@@ -21,12 +21,13 @@ export const UNIT_SELECT = `
   title_type:title_types ( name ),
   source:parties!units_source_party_id_fkey ( id, name ),
   sold_to:parties!units_sold_to_party_id_fkey ( id, name ),
-  sales_order:sales_orders ( id, order_number, customer_reference ),
-  dispatch:dispatches ( id, dispatch_number )
+  sales_order:sales_orders ( id, order_number, customer_reference, price, price_unit ),
+  dispatch:dispatches ( id, dispatch_number ),
+  invoice:invoices ( id, invoice_number, open )
 `
 
 export async function fetchAll() {
-  const [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches] = await Promise.all([
+  const [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches, invoices] = await Promise.all([
     supabase.from('unit_statuses').select('id, name, sort_order').order('sort_order'),
     supabase.from('parties').select(`
       id, name, billing_address, city, state, zip,
@@ -54,12 +55,19 @@ export async function fetchAll() {
       destination:parties!dispatches_destination_party_id_fkey ( id, name, billing_address ),
       units ( count )
     `).order('id', { ascending: false }).limit(10000),
+    supabase.from('invoices').select(`
+      id, legacy_invoice_id, invoice_number, invoice_date, due_date, terms,
+      amount, open, paid_date, paid_amount, payment_method, payment_ref,
+      notes, voided, created_at,
+      buyer:parties ( id, name ),
+      units ( count )
+    `).eq('voided', false).order('id', { ascending: false }).limit(10000),
   ])
-  for (const r of [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches]) if (r.error) throw r.error
+  for (const r of [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches, invoices]) if (r.error) throw r.error
   return {
     statuses: statuses.data, parties: parties.data, orders: orders.data,
     groups: groups.data, equipTypes: equipTypes.data, titleTypes: titleTypes.data,
-    dispatches: dispatches.data,
+    dispatches: dispatches.data, invoices: invoices.data,
   }
 }
 
@@ -92,6 +100,7 @@ export async function fetchUnitsPage({ filters = {}, sort = {}, page = 0, pageSi
   if (filters.missingOnly) q = q.eq('missing', true)
   if (filters.unattachedSO) q = q.is('sales_order_id', null)
   if (filters.unattachedDispatch) q = q.is('dispatch_id', null)
+  if (filters.unattachedInvoice) q = q.is('invoice_id', null)
   if (filters.q?.trim()) {
     const needle = filters.q.trim().replaceAll(',', ' ').replaceAll('%', '')
     q = q.or(['unit_number', 'alt_unit_number', 'vin', 'physical_location']
@@ -245,6 +254,60 @@ export async function attachUnits(orderId, unitIds) {
   if (error) throw error
 }
 
+// ---- invoices (Phase 3b strawman — provisional until Katherine's pass) ----
+
+export const nextInvoiceNumber = (invoices) => {
+  const max = invoices.reduce((m, i) => {
+    const n = /^INV-(\d+)$/.exec(i.invoice_number || '')
+    return n && Number(n[1]) > m ? Number(n[1]) : m
+  }, 1000)
+  return `INV-${max + 1}`
+}
+
+export async function saveInvoice(fields, id) {
+  const q = id
+    ? supabase.from('invoices').update(fields).eq('id', id)
+    : supabase.from('invoices').insert(fields)
+  const { error } = await q
+  if (error) throw error
+}
+
+export async function fetchInvoiceUnits(invoiceId) {
+  const { data, error } = await supabase.from('units')
+    .select(UNIT_SELECT).eq('invoice_id', invoiceId).order('id').limit(1000)
+  if (error) throw error
+  return data
+}
+
+// Attach an EXPLICIT list of unit ids to an invoice. The DB trigger flips
+// them to Invoiced — Closed and audit-logs it.
+export async function assignUnitsToInvoice(invoiceId, unitIds) {
+  if (!unitIds.length) return
+  const { error } = await supabase.from('units')
+    .update({ invoice_id: invoiceId })
+    .in('id', unitIds)
+  if (error) throw error
+}
+
+export async function markInvoicePaid(id, { paid_date, paid_amount, payment_method, payment_ref }) {
+  const { error } = await supabase.from('invoices')
+    .update({ open: false, paid_date, paid_amount, payment_method, payment_ref })
+    .eq('id', id)
+  if (error) throw error
+}
+
+// Suggested invoice amount from a unit's SO pricing — a HELPER for Katherine,
+// never authoritative (settlement weights/deductions are her Phase 3b domain).
+export function suggestedUnitAmount(u) {
+  const price = u.sales_order?.price
+  const unit = u.sales_order?.price_unit
+  if (price == null) return null
+  if (unit === 'flat') return Number(price)
+  const wt = u.confirmed_net ?? u.net_wt
+  if (wt == null) return null
+  return unit === 'per_ton' ? (Number(price) * wt) / 2000 : Number(price) * wt
+}
+
 // ---- dispatch (Phase 3 strawman — workflow provisional until Kim's pass) ----
 
 export const nextDispatchNumber = (dispatches) => {
@@ -297,6 +360,8 @@ const CAN = {
   addNote: ['office', 'sales', 'logistics', 'accounting', 'admin'],
   createDispatch: ['logistics', 'admin'],
   editDispatch: ['logistics', 'admin'],
+  createInvoice: ['accounting', 'admin'],
+  editInvoice: ['accounting', 'admin'],
 }
 export const can = (role, action) => (CAN[action] || []).includes(role)
 

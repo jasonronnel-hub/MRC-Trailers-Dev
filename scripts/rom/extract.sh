@@ -62,13 +62,26 @@ SCOPE="scoped AS (
 
 echo "Extracting from $CONTAINER/$DB …"
 
+# One-time helper index on the restored copy (rehearsal DB only — never the
+# live ROM server): makes the invoice-linkage lookup a seek instead of a scan.
+docker exec "$CONTAINER" /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "$PASS" -C -d "$DB" \
+  -Q "IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='ix_mrc_owt' AND object_id=OBJECT_ID('dbo.InvoiceDetail'))
+      CREATE INDEX ix_mrc_owt ON dbo.InvoiceDetail(OurWeightTicket, TicketCompanyID)
+      INCLUDE (InvoiceID, InvoiceType, CompanyID, DTLVoid);" >/dev/null
+
 # ---- units (the validated 23,081-row join + first non-void weight line) ----
 run_query units.psv ";WITH $SCOPE
-SELECT $(i s.BrokerWTID)$SEP$(i s.CompanyID)$SEP$(i s.Void)$SEP$(t s.UnitNum)$SEP$(t s.AltUnitNum)$SEP$(t s.VIN)$SEP$(i s.TrailerSizeID)$SEP$(i s.TrailerMakeID)$SEP$(i s.TrailerYear)$SEP$(i s.ReadyState)$SEP$(d s.ReadyDate)$SEP$(d s.SchedDate)$SEP$(d s.DispatchDate)$SEP$(d s.PickUpDate)$SEP$(d s.CompletionDate)$SEP$(i s.MIA)$SEP$(i s.TitleTypeID)$SEP$(i s.TitleRec)$SEP$(d s.TitleRecDate)$SEP$(d s.TitleSentDate)$SEP$(t s.TitleTrackingNum)$SEP$(i s.PurchDealerID)$SEP$(i s.PurchOrderID)$SEP$(t s.PurchCustRef)$SEP$(i s.SaleDealerID)$SEP$(i s.SaleOrderID)$SEP$(t s.SaleCustRef)$SEP$(i s.HaulerID)$SEP$(i s.DispatchID)$SEP$(t s.TicketNotes)$SEP$(n dd.Gross)$SEP$(n dd.Tare)$SEP$(n dd.Net)$SEP$(n dd.AdjWT)$SEP$(t dd.AdjReason)$SEP$(n dd.ConfirmedGross)$SEP$(n dd.ConfirmedTare)$SEP$(n dd.ConfirmedGross-dd.ConfirmedTare)$SEP$(i dd.SOID)$SEP$(i s.TrailerTypeInvID)$SEP$(t inv.ItemName)$SEP$(t mt.Description)$SEP$(t pc.ContactName)$SEP$(t pc.Address)$SEP$(t sc.ContactName)$SEP$(i s.DeliverToID)$SEP$(t s.DeliverWTID)$SEP$(i dd.POID)$SEP$(i dd.PurchTicketID)$SEP$(i dd.SalesTicketID)$SEP$(t dd.WTUM)
+SELECT $(i s.BrokerWTID)$SEP$(i s.CompanyID)$SEP$(i s.Void)$SEP$(t s.UnitNum)$SEP$(t s.AltUnitNum)$SEP$(t s.VIN)$SEP$(i s.TrailerSizeID)$SEP$(i s.TrailerMakeID)$SEP$(i s.TrailerYear)$SEP$(i s.ReadyState)$SEP$(d s.ReadyDate)$SEP$(d s.SchedDate)$SEP$(d s.DispatchDate)$SEP$(d s.PickUpDate)$SEP$(d s.CompletionDate)$SEP$(i s.MIA)$SEP$(i s.TitleTypeID)$SEP$(i s.TitleRec)$SEP$(d s.TitleRecDate)$SEP$(d s.TitleSentDate)$SEP$(t s.TitleTrackingNum)$SEP$(i s.PurchDealerID)$SEP$(i s.PurchOrderID)$SEP$(t s.PurchCustRef)$SEP$(i s.SaleDealerID)$SEP$(i s.SaleOrderID)$SEP$(t s.SaleCustRef)$SEP$(i s.HaulerID)$SEP$(i s.DispatchID)$SEP$(t s.TicketNotes)$SEP$(n dd.Gross)$SEP$(n dd.Tare)$SEP$(n dd.Net)$SEP$(n dd.AdjWT)$SEP$(t dd.AdjReason)$SEP$(n dd.ConfirmedGross)$SEP$(n dd.ConfirmedTare)$SEP$(n dd.ConfirmedGross-dd.ConfirmedTare)$SEP$(i dd.SOID)$SEP$(i s.TrailerTypeInvID)$SEP$(t inv.ItemName)$SEP$(t mt.Description)$SEP$(t pc.ContactName)$SEP$(t pc.Address)$SEP$(t sc.ContactName)$SEP$(i s.DeliverToID)$SEP$(t s.DeliverWTID)$SEP$(i dd.POID)$SEP$(i dd.PurchTicketID)$SEP$(i dd.SalesTicketID)$SEP$(t dd.WTUM)$SEP$(i ivd.InvoiceID)
 FROM scoped s
 OUTER APPLY (SELECT TOP 1 * FROM dbo.BrokerWTDTL d
              WHERE d.BrokerWTID = s.BrokerWTID AND d.CompanyID = s.CompanyID AND d.DTLVoid = 0
              ORDER BY d.LineID) dd
+OUTER APPLY (SELECT TOP 1 x.InvoiceID FROM dbo.InvoiceDetail x
+             JOIN dbo.Invoice iv2 ON iv2.InvoiceID = x.InvoiceID AND iv2.InvoiceType = x.InvoiceType AND iv2.CompanyID = x.CompanyID
+             WHERE x.OurWeightTicket = s.BrokerWTID AND x.TicketCompanyID = s.CompanyID
+               AND x.DTLVoid = 0 AND iv2.CustomerID = s.SaleDealerID
+             ORDER BY x.InvoiceID DESC) ivd
 LEFT JOIN dbo.EntInventory inv ON inv.InventoryID = s.TrailerTypeInvID
 LEFT JOIN dbo.MaterialType mt ON mt.MaterialTypeID = s.MaterialTypeID AND mt.CompanyID = s.CompanyID
 LEFT JOIN dbo.EntContacts pc ON pc.ContactID = s.ContactID
@@ -100,6 +113,19 @@ WHERE o.OrderID IN (
   SELECT SaleOrderID FROM scoped WHERE SaleOrderID > 0
   UNION SELECT PurchOrderID FROM scoped WHERE PurchOrderID > 0
   UNION SELECT d.SOID FROM dbo.BrokerWTDTL d JOIN scoped s2 ON d.BrokerWTID = s2.BrokerWTID AND d.CompanyID = s2.CompanyID WHERE d.SOID > 0)"
+
+# ---- invoices (headers for every invoice a scoped unit's sale line points at) ----
+run_query invoices.psv ";WITH $SCOPE,
+linked AS (
+  SELECT DISTINCT x.InvoiceID, x.InvoiceType, x.CompanyID
+  FROM scoped sc2
+  JOIN dbo.InvoiceDetail x ON x.OurWeightTicket = sc2.BrokerWTID
+   AND x.TicketCompanyID = sc2.CompanyID AND x.DTLVoid = 0
+  JOIN dbo.Invoice iv2 ON iv2.InvoiceID = x.InvoiceID AND iv2.InvoiceType = x.InvoiceType AND iv2.CompanyID = x.CompanyID
+   AND iv2.CustomerID = sc2.SaleDealerID)
+SELECT $(i i.InvoiceID)$SEP$(i i.CompanyID)$SEP$(i i.CustomerID)$SEP$(d i.InvoiceDate)$SEP$(d i.DueDate)$SEP$(t i.Terms)$SEP$(i i.isOpen)$SEP$(d i.PaymentRecDate)$SEP$(n i.CashPaid)$SEP$(n i.CheckPaid)$SEP$(n i.WirePaid)$SEP$(i i.CheckNumber)$SEP$(t i.PaymentRef)$SEP$(i i.Void)$SEP$(t i.Notes)
+FROM dbo.Invoice i JOIN linked l
+  ON l.InvoiceID = i.InvoiceID AND l.InvoiceType = i.InvoiceType AND l.CompanyID = i.CompanyID"
 
 # ---- notes (attached to scoped units, or to exported dealers) ----
 run_query notes.psv ";WITH $SCOPE

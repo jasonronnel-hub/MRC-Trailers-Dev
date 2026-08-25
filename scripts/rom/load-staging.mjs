@@ -32,7 +32,12 @@ const FILES = {
     'type_inv_id', 'type_item_name', 'material_type',
     'purch_contact_name', 'purch_contact_address', 'sold_contact_name',
     'deliver_to_id', 'deliver_wt_ref',
-    'po_id', 'purch_ticket_id', 'sales_ticket_id', 'wt_um',
+    'po_id', 'purch_ticket_id', 'sales_ticket_id', 'wt_um', 'sale_invoice_id',
+  ]],
+  'invoices.psv': ['staging_invoices', [
+    'invoice_id', 'company_id', 'customer_id', 'invoice_date', 'due_date', 'terms',
+    'is_open', 'payment_rec_date', 'cash_paid', 'check_paid', 'wire_paid',
+    'check_number', 'payment_ref', 'void', 'notes',
   ]],
   'dealers.psv': ['staging_dealers', [
     'dealer_id', 'company_name', 'group_id', 'billing_address', 'city', 'state', 'zip',

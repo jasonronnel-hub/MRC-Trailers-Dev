@@ -179,6 +179,45 @@ const skippedOrders = stOrders.length - orderRows.length
 const soIds = await fetchAllRows('sales_orders', 'id, legacy_order_id', (q) => q.not('legacy_order_id', 'is', null))
 const so = new Map(soIds.map((o) => [o.legacy_order_id, o.id]))
 
+// ---------- 5b. invoices (headers; invoiced ≠ paid comes from isOpen/PaymentRecDate) ----------
+const stInvoicesRaw = await fetchAllRows('staging_invoices', '*')
+const byInvId = new Map()
+for (const v of stInvoicesRaw) {
+  const existing = byInvId.get(v.invoice_id)
+  if (!existing || v.company_id === '7675') byInvId.set(v.invoice_id, v)
+}
+const stInvoices = [...byInvId.values()]
+const invoiceRows = stInvoices.map((v) => {
+  const paidSum = (num(v.cash_paid) ?? 0) + (num(v.check_paid) ?? 0) + (num(v.wire_paid) ?? 0)
+  const method = (num(v.wire_paid) ?? 0) > 0 ? 'Wire'
+    : (num(v.check_paid) ?? 0) > 0 ? 'Check'
+    : (num(v.cash_paid) ?? 0) > 0 ? 'Cash' : null
+  // PAID truth: ROM's Invoice.isOpen is 0 even on invoices issued the day of
+  // the backup (money can't have arrived on Net 30) — it is NOT the AR-open
+  // flag. PaymentRecDate / the *Paid amounts are the real signal. Confirm
+  // semantics with Katherine in Phase 3b.
+  const paid = !!v.payment_rec_date || paidSum > 0
+  return {
+    legacy_invoice_id: int(v.invoice_id),
+    invoice_number: `R-INV-${v.invoice_id}`,
+    buyer_party_id: party.get(int(v.customer_id)) ?? null,
+    invoice_date: dateOnly(v.invoice_date), due_date: dateOnly(v.due_date),
+    terms: v.terms || null,
+    amount: paidSum > 0 ? paidSum : null,
+    open: !paid && v.void !== '1',
+    paid_date: dateOnly(v.payment_rec_date),
+    paid_amount: paid && paidSum > 0 ? paidSum : null,
+    payment_method: paid ? method : null,
+    payment_ref: v.payment_ref || (v.check_number && v.check_number !== '0' ? `check ${v.check_number}` : null),
+    notes: v.notes || null,
+    voided: v.void === '1',
+  }
+}).filter((v) => v.legacy_invoice_id != null)
+await upsert('invoices', invoiceRows, 'legacy_invoice_id', 'invoices')
+
+const invIds = await fetchAllRows('invoices', 'id, legacy_invoice_id', (q) => q.not('legacy_invoice_id', 'is', null))
+const inv = new Map(invIds.map((v) => [v.legacy_invoice_id, v.id]))
+
 // ---------- 6. units ----------
 const stUnits = await fetchAllRows('staging_units', '*')
 let soidFallbacks = 0
@@ -208,6 +247,7 @@ const unitRows = stUnits.map((u) => {
     title_sent_date: dateOnly(u.title_sent_date), title_tracking_num: u.title_tracking || null,
     sold_to_party_id: party.get(int(u.sale_dealer_id)) ?? null,
     sales_order_id: legacySo ? (so.get(legacySo) ?? null) : null,
+    invoice_id: int(u.sale_invoice_id) ? (inv.get(int(u.sale_invoice_id)) ?? null) : null,
     hauler_party_id: party.get(int(u.hauler_id)) ?? null,
     gross_wt: num(u.gross), tare_wt: num(u.tare), net_wt: num(u.net),
     confirmed_gross: num(u.confirmed_gross), confirmed_tare: num(u.confirmed_tare),

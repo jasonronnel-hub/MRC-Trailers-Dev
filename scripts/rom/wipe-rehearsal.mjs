@@ -19,7 +19,7 @@ console.log('Wiping staging tables…')
 for (const [table, col] of [
   ['staging_units', 'bwt_id'], ['staging_dealers', 'dealer_id'],
   ['staging_contacts', 'contact_id'], ['staging_orders', 'order_id'],
-  ['staging_notes', 'note_id'],
+  ['staging_notes', 'note_id'], ['staging_invoices', 'invoice_id'],
 ]) {
   const { error } = await db.from(table).delete().neq(col, '__never__')
   if (error) { console.error(`${table}: ${error.message}`); process.exit(1) }

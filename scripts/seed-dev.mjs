@@ -18,7 +18,8 @@ const die = (label, error) => { if (error) { console.error(label + ':', error.me
 // ---- wipe (FK order) --------------------------------------------------------
 console.log('Wiping existing demo data…')
 const WIPE = [['notes', 'id'], ['status_log', 'id'], ['units', 'id'], ['dispatches', 'id'],
-  ['sales_orders', 'id'], ['party_banking', 'party_id'], ['party_contacts', 'id'], ['parties', 'id']]
+  ['invoices', 'id'], ['sales_orders', 'id'], ['party_banking', 'party_id'],
+  ['party_contacts', 'id'], ['parties', 'id']]
 for (const [t, pk] of WIPE) {
   const { error } = await db.from(t).delete().neq(pk, -1)
   die(`wipe ${t}`, error)
@@ -115,9 +116,24 @@ const units = [
   U({ unit: 'FDX-2790', vin: 'DEMO0FEDEX0006', source: 'FedEx Ground', equip: 'Long Straight Rail', loc: 'Harrisburg, PA', status: 'Sold — Dispatch Required', price: 700, wt: 10000, soldTo: 'SA Recycling', so: 'SO-1041' }),
   U({ unit: 'FDX-2795', vin: 'DEMO0FEDEX0007', source: 'FedEx Ground', equip: 'Drop Frame Pup', loc: 'Anaheim, CA', status: 'Dispatched — Delivery Required', price: 900, wt: 8500, soldTo: 'SA Recycling', so: 'SO-1041' }),
   U({ unit: 'FDX-2610', vin: 'DEMO0FEDEX0008', source: 'FedEx Ground', equip: 'Drop Frame Pup', loc: 'Anaheim, CA', status: 'Delivered — Invoice Required', price: 900, wt: 8500, soldTo: 'SA Recycling', so: 'SO-1041' }),
+  U({ unit: 'FDX-2601', vin: 'DEMO0FEDEX0009', source: 'FedEx Ground', equip: 'Drop Frame Pup', loc: 'Anaheim, CA', status: 'Delivered — Invoice Required', price: 900, wt: 8500, soldTo: 'SA Recycling', so: 'SO-1041' }),
 ]
 const { error: ue } = await db.from('units').insert(units)
 die('units', ue)
+
+// One open invoice with FDX-2601 attached — completes the 6-stage pipeline
+// demo (the attach trigger flips it to Invoiced — Closed; the invoice stays
+// OPEN because invoiced ≠ paid).
+console.log('Seeding invoice…')
+const { data: invRow, error: ie } = await db.from('invoices').insert({
+  invoice_number: 'INV-1001', buyer_party_id: partyIds['SA Recycling'],
+  invoice_date: '2026-08-20', due_date: '2026-09-19', terms: 'Net 30',
+  amount: 1445.00, open: true,
+  notes: 'Demo invoice — 8,500 lb @ $0.17/lb.',
+}).select('id').single()
+die('invoice', ie)
+const { data: invUnit } = await db.from('units').select('id').eq('unit_number', 'FDX-2601').single()
+die('attach to invoice', (await db.from('units').update({ invoice_id: invRow.id }).eq('id', invUnit.id)).error)
 
 const { count } = await db.from('units').select('*', { count: 'exact', head: true })
 console.log(`Done. ${count} units, ${orders.length} sales orders, ${SUPPLIERS.length + buyers.length} parties.`)
