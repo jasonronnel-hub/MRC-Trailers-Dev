@@ -29,10 +29,15 @@ left column, stop and think; the right column is expected to churn.
 
 ## Deliberately deferred (don't guess — ask the person)
 
-- **Dispatch records, release documents, emails, Tuesday Report** — Phase 3,
-  designed *with Kim*. The `units` dispatch fields and `hauler_party_id` exist,
-  but dispatch as an entity does not. When it lands, it's a new table + new
-  migration, not a rework of `units`.
+- **Dispatch records, release documents, emails, Tuesday Report** — built as
+  a WORKING STRAWMAN (Jason's call, Aug 2026) so Kim edits a running thing
+  instead of a blank page. It landed additively as planned: `dispatches`
+  table + `units.dispatch_id` in their own migration. Everything Kim is
+  expected to reshape is isolated: email wording in
+  `src/lib/emailTemplates.js`, document layout in `PrintDoc.jsx`, report
+  sections in `TuesdayReport.jsx`, workflow in `Dispatch.jsx`. Field
+  additions to `dispatches` = new migration. Nothing else depends on the
+  strawman's choices.
 - **Invoicing** — stays in ROM until Phase 3b *with Katherine*. `Invoiced —
   Closed` status and `confirmed_*` weights are the only hooks so far.
 - **`notes` order/dispatch mapping** — legacy notes migrate to units and
