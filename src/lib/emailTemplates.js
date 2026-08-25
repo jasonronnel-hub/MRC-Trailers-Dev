@@ -33,8 +33,10 @@ ${unitLines(units)}
 
 ${d.notes ? `Notes: ${d.notes}\n\n` : ''}Please reply to confirm the pickup date and driver.
 
-Kim
-MRC Trailers & Containers`,
+Kim Neely
+Metal Recycling Corp
+720-630-9630
+www.metalrecyclingcorp.com`,
   }
 }
 
@@ -58,28 +60,50 @@ ${unitLines(units)}
 Reference: MRC dispatch ${d.dispatch_number}. Please contact us with any
 questions before release.
 
-Kim
-MRC Trailers & Containers`,
+Kim Neely
+Metal Recycling Corp
+720-630-9630
+www.metalrecyclingcorp.com`,
   }
 }
 
-// 3 — Delivery notice → the buying yard
+// 3 — Delivery notice → the buying yard.
+// Structure and wording match Kim's real email (sample from Jason, Aug 2026):
+// hauler + delivery day up top, an equipment table (Unit / VIN / Size /
+// Material), the notarized bill-of-sale line when BOS units are aboard,
+// and her signature block.
+const DAY = (iso) => {
+  if (!iso) return null
+  const d = new Date(`${iso}T12:00:00`)
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-US', { weekday: 'long' })
+}
+
 export function deliveryNoticeEmail(d, units) {
-  const so = units.find((u) => u.sales_order?.order_number)?.sales_order
+  const deliveryDay = DAY(d.delivery_eta) || DAY(d.scheduled_pickup)
+  const hasBos = units.some((u) => u.title_type?.name === 'Bill of Sale')
+  const rows = units.map((u) => [
+    u.unit_number || `W${u.legacy_bwt_id ?? u.id}`,
+    u.vin || '—',
+    u.equipment_type?.name || '—',
+    u.material_type || '',
+  ])
+  const widths = [4, 3, 4, 8].map((min, i) => Math.max(min, ...rows.map((r) => r[i].length),
+    ['Unit', 'VIN', 'Size', 'Material'][i].length))
+  const line = (cells) => cells.map((c, i) => c.padEnd(widths[i])).join('  ').trimEnd()
+
   return {
     to: '',   // filled from the buyer's default contact in the preview
-    subject: `MRC delivery — ${units.length} unit${units.length === 1 ? '' : 's'} en route${so ? ` (ref ${so.customer_reference || so.order_number})` : ''}`,
-    body: `Hello,
+    subject: `Equipment headed your way — ${units.length} unit${units.length === 1 ? '' : 's'} via ${d.hauler?.name || 'our hauler'}${deliveryDay ? ` on ${deliveryDay}` : ''}`,
+    body: `Good afternoon,
 
-The following units are en route to your yard via ${d.hauler?.name || 'our carrier'}:
+${d.hauler?.name || 'Our hauler'} has been dispatched to bring you the below listed equipment${deliveryDay ? ` on ${deliveryDay}` : ''}.${hasBos ? '  Notarized bill of sale will be delivered to your facility ahead of the equipment.' : ''}  Please let me know if you have any questions or run into any issues.  Thank you!
 
-${unitLines(units)}
+${line(['Unit', 'VIN', 'Size', 'Material'])}
+${rows.map(line).join('\n')}
 
-Expected delivery: ${d.delivery_eta || d.scheduled_pickup || 'TBD'}
-${so ? `Order reference: ${so.customer_reference || so.order_number}\n` : ''}
-Please send scale tickets after processing so we can finalize the invoice.
-
-Kim
-MRC Trailers & Containers`,
+Kim Neely
+Metal Recycling Corp
+720-630-9630
+www.metalrecyclingcorp.com`,
   }
 }
