@@ -1,8 +1,34 @@
+import { useEffect, useState } from 'react'
 import Pill from './Pill'
+import { useNotes, PopupBanners, NotesList } from './Notes'
+import { fetchStatusLog } from '../lib/api'
 
 const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString())
 
-export default function UnitDrawer({ unit, close, onEdit }) {
+function StatusHistory({ unitId, statuses }) {
+  const [log, setLog] = useState(null)
+  useEffect(() => { fetchStatusLog(unitId).then(setLog).catch(() => setLog([])) }, [unitId])
+  const name = (id) => statuses.find((s) => s.id === id)?.name || `status ${id}`
+
+  if (!log?.length) return null
+  return (
+    <div style={{ marginTop: 16 }}>
+      <b>Status history</b>
+      {log.map((l) => (
+        <div key={l.id} style={{ borderTop: '1px solid var(--line)', padding: '6px 0', fontSize: 12.5 }}>
+          {l.from_status ? <>{name(l.from_status)} → </> : ''}<b>{name(l.to_status)}</b>
+          {l.context && <span className="muted"> · {l.context}</span>}
+          <span className="muted" style={{ float: 'right' }}>
+            {l.changed_at ? new Date(l.changed_at).toLocaleDateString() : ''}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export default function UnitDrawer({ unit, statuses, role, close, onEdit }) {
+  const notesState = useNotes('unit', unit?.id)
   if (!unit) return null
   return (
     <div className="drawer-wrap" onClick={close}>
@@ -17,6 +43,7 @@ export default function UnitDrawer({ unit, close, onEdit }) {
         </div>
         <div className="dbody">
           <div style={{ marginBottom: 14 }}><Pill status={unit.status?.name} /></div>
+          <PopupBanners popups={notesState.popups} />
           <dl className="kv">
             <dt>BWT #</dt><dd><span className="ticket">W{unit.legacy_bwt_id ?? unit.id}</span></dd>
             <dt>VIN</dt><dd className="mono">{unit.vin || '—'}</dd>
@@ -42,10 +69,13 @@ export default function UnitDrawer({ unit, close, onEdit }) {
               {unit.sales_order?.order_number || '—'}
               {unit.sales_order?.customer_reference && <span className="muted"> · {unit.sales_order.customer_reference}</span>}
             </dd>
+            <dt>Dispatch</dt><dd className="mono">{unit.dispatch?.dispatch_number || '—'}</dd>
           </dl>
           {unit.condition_comments && (
             <div className="banner"><b>Condition:</b> {unit.condition_comments}</div>
           )}
+          <NotesList entityType="unit" entityId={unit.id} notesState={notesState} role={role} />
+          <StatusHistory unitId={unit.id} statuses={statuses} />
         </div>
       </div>
     </div>

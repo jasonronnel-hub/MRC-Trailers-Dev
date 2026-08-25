@@ -130,10 +130,70 @@ async function testStatusAutomation() {
   await sales.auth.signOut()
 }
 
+async function testDispatchPolicies() {
+  console.log('\nDispatch (Spec §3: logistics/admin write; sales cannot):')
+  const logistics = await signedInClient('rls-test-logistics@mrc-test.invalid')
+  const { data: d, error } = await logistics.from('dispatches')
+    .insert({ dispatch_number: 'D-RLS-TEST', hauler_party_id: partyId }).select().single()
+  check(!error, `logistics can create a dispatch${error ? ' (err: ' + error.message + ')' : ''}`)
+  await logistics.auth.signOut()
+
+  const sales = await signedInClient('rls-test-sales@mrc-test.invalid')
+  const { error: se } = await sales.from('dispatches')
+    .insert({ dispatch_number: 'D-RLS-NOPE', hauler_party_id: partyId })
+  check(!!se, 'sales CANNOT create a dispatch')
+  const { data: read } = await sales.from('dispatches').select('id').eq('dispatch_number', 'D-RLS-TEST')
+  check((read?.length ?? 0) === 1, 'sales can read dispatches (division read)')
+  await sales.auth.signOut()
+
+  if (d?.id) await admin.from('dispatches').delete().eq('id', d.id)
+}
+
+async function testStagingInvisibility() {
+  console.log('\nStaging tables (raw ROM data — invisible to every app role):')
+  await admin.from('staging_dealers').insert({ dealer_id: '-999999', company_name: 'RLS TEST ROW' })
+  for (const roleName of ['admin', 'accounting', 'logistics']) {
+    const c = await signedInClient(`rls-test-${roleName}@mrc-test.invalid`)
+    const { data, error } = await c.from('staging_dealers').select('dealer_id').eq('dealer_id', '-999999')
+    check((data?.length ?? 0) === 0, `${roleName.padEnd(10)} sees NO staging rows${error ? ' (blocked)' : ''}`)
+    await c.auth.signOut()
+  }
+  await admin.from('staging_dealers').delete().eq('dealer_id', '-999999')
+}
+
+async function testNotesPolicies() {
+  console.log('\nNotes (division writes own; readonly blocked; author-only edits):')
+  const sales = await signedInClient('rls-test-sales@mrc-test.invalid')
+  const { data: { user: salesUser } } = await sales.auth.getUser()
+  const { data: note, error } = await sales.from('notes')
+    .insert({ entity_type: 'unit', entity_id: unitId, note_text: 'rls test note', author: salesUser.id })
+    .select().single()
+  check(!error, `sales can add a note as themselves${error ? ' (err: ' + error.message + ')' : ''}`)
+  const { error: forgeErr } = await sales.from('notes')
+    .insert({ entity_type: 'unit', entity_id: unitId, note_text: 'forged', author: users.find((u) => u.role === 'admin').id })
+  check(!!forgeErr, 'sales CANNOT forge a note as another author')
+  await sales.auth.signOut()
+
+  const ro = await signedInClient('rls-test-readonly@mrc-test.invalid')
+  const { data: { user: roUser } } = await ro.auth.getUser()
+  const { error: roErr } = await ro.from('notes')
+    .insert({ entity_type: 'unit', entity_id: unitId, note_text: 'nope', author: roUser.id })
+  check(!!roErr, 'readonly CANNOT add notes')
+  const { data: roRead } = await ro.from('notes').select('id').eq('id', note?.id ?? -1)
+  check((roRead?.length ?? 0) === 1, 'readonly can still read notes')
+
+  const { data: roEdit } = await ro.from('notes').update({ voided: true }).eq('id', note?.id ?? -1).select()
+  check((roEdit?.length ?? 0) === 0, 'readonly cannot void someone else’s note')
+  await ro.auth.signOut()
+
+  if (note?.id) await admin.from('notes').delete().eq('id', note.id)
+}
+
 async function cleanup() {
   console.log('\nCleaning up…')
   if (unitId) await admin.from('status_log').delete().eq('unit_id', unitId)
   if (unitId) await admin.from('units').delete().eq('id', unitId)
+  await admin.from('dispatches').delete().in('dispatch_number', ['D-RLS-TEST', 'D-RLS-NOPE'])
   if (soId) await admin.from('sales_orders').delete().eq('id', soId)
   if (partyId) {
     await admin.from('party_banking').delete().eq('party_id', partyId)
@@ -147,6 +207,9 @@ try {
   await testBankingVisibility()
   await testDivisionRead()
   await testStatusAutomation()
+  await testDispatchPolicies()
+  await testStagingInvisibility()
+  await testNotesPolicies()
 } finally {
   await cleanup()
 }

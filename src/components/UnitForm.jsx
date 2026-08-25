@@ -26,6 +26,7 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
     purchase_price: F(unit?.purchase_price),
     ref_weight_lbs: F(unit?.ref_weight_lbs),
     condition_comments: F(unit?.condition_comments),
+    voided: unit?.voided ?? false,
   })
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -60,6 +61,7 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
         purchase_price: f.purchase_price === '' ? null : Number(f.purchase_price),
         ref_weight_lbs: f.ref_weight_lbs === '' ? null : parseInt(f.ref_weight_lbs, 10),
         condition_comments: f.condition_comments || null,
+        voided: f.voided,
       }, unit?.id)
       onSaved()
     } catch (ex) {
@@ -138,6 +140,14 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
             <label>Condition comments</label>
             <textarea value={f.condition_comments} onChange={set('condition_comments')} />
           </div>
+          {editing && (
+            <div className="field full">
+              <label className="checkline" style={{ color: 'var(--error)' }}>
+                <input type="checkbox" checked={f.voided} onChange={set('voided')} />
+                Void this ticket (hides it from inventory; the record is kept)
+              </label>
+            </div>
+          )}
         </div>
         <div className="form-actions">
           <button type="button" className="btn ghost" onClick={close}>Cancel</button>

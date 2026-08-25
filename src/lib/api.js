@@ -65,6 +65,14 @@ export async function saveParty(fields, id) {
   if (error) throw error
 }
 
+export async function saveContact(fields, id) {
+  const q = id
+    ? supabase.from('party_contacts').update(fields).eq('id', id)
+    : supabase.from('party_contacts').insert(fields)
+  const { error } = await q
+  if (error) throw error
+}
+
 export async function saveOrder(fields, id) {
   const q = id
     ? supabase.from('sales_orders').update(fields).eq('id', id)
@@ -106,11 +114,40 @@ export async function setUnitsStatus(unitIds, statusId) {
   if (error) throw error
 }
 
-export async function addNote(entityType, entityId, text) {
+export async function addNote(entityType, entityId, text, popup = false) {
   const { data: { user } } = await supabase.auth.getUser()
   const { error } = await supabase.from('notes')
-    .insert({ entity_type: entityType, entity_id: entityId, note_text: text, author: user?.id })
+    .insert({ entity_type: entityType, entity_id: entityId, note_text: text, popup, author: user?.id })
   if (error) throw error
+}
+
+// Notes are lazy-loaded per drawer — with 23k migrated units they can't ride
+// along in fetchAll. Popup notes are ROM's PopUpNote: must-see warnings that
+// surface the moment the record opens.
+export async function fetchNotes(entityType, entityId) {
+  const { data, error } = await supabase.from('notes')
+    .select('id, note_text, note_type, popup, author, authored_at, voided, legacy_note_id')
+    .eq('entity_type', entityType).eq('entity_id', entityId)
+    .eq('voided', false)
+    .order('authored_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function voidNote(id) {
+  const { error } = await supabase.from('notes').update({ voided: true }).eq('id', id)
+  if (error) throw error
+}
+
+// Status history for one unit, newest first (names resolved by the caller
+// from the statuses lookup).
+export async function fetchStatusLog(unitId) {
+  const { data, error } = await supabase.from('status_log')
+    .select('id, from_status, to_status, changed_by, changed_at, context')
+    .eq('unit_id', unitId)
+    .order('id', { ascending: false })
+  if (error) throw error
+  return data
 }
 
 // Attach an EXPLICIT list of unit ids to a sales order. The database trigger

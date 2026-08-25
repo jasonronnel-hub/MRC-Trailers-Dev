@@ -101,7 +101,7 @@ export default function Inventory({ data, role, refresh, statusFilter, setStatus
       )}
 
       {drawerUnit && (
-        <UnitDrawer unit={drawerUnit} close={() => setDrawerUnit(null)}
+        <UnitDrawer unit={drawerUnit} statuses={statuses} role={role} close={() => setDrawerUnit(null)}
           onEdit={can(role, 'editUnit') ? () => setFormUnit(drawerUnit) : null} />
       )}
       {formUnit && (

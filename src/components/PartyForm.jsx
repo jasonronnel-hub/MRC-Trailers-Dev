@@ -1,11 +1,20 @@
 import { useState } from 'react'
 import Modal from './Modal'
-import { saveParty } from '../lib/api'
+import { saveParty, saveContact } from '../lib/api'
 
 const F = (v) => v ?? ''
+const newContact = () => ({ id: null, name: '', email: '', phone: '', is_default: false, active: true, _dirty: true })
 
 export default function PartyForm({ party, groups, close, onSaved }) {
   const editing = !!party
+  const [contacts, setContacts] = useState(
+    (party?.contacts || []).map((c) => ({ ...c, _dirty: false })),
+  )
+  const setContact = (i, key, value) => {
+    const next = contacts.slice()
+    next[i] = { ...next[i], [key]: value, _dirty: true }
+    setContacts(next)
+  }
   const [f, setF] = useState({
     name: F(party?.name),
     group_id: party?.group?.id ?? groups.find((g) => g.name === 'Trailer Buyer')?.id ?? '',
@@ -35,6 +44,13 @@ export default function PartyForm({ party, groups, close, onSaved }) {
         deduction_model: f.deduction_model || null,
         destruction_agreement_signed: f.destruction_agreement_signed || null,
       }, party?.id)
+      if (editing) {
+        for (const c of contacts) {
+          if (!c._dirty || (!c.id && !c.name.trim())) continue
+          const { _dirty, id, ...fields } = c
+          await saveContact(id ? fields : { ...fields, party_id: party.id }, id)
+        }
+      }
       onSaved()
     } catch (ex) {
       setErr(ex.message); setBusy(false)
@@ -102,6 +118,28 @@ export default function PartyForm({ party, groups, close, onSaved }) {
             <label>Pop-up warning (hot note)</label>
             <textarea value={f.purchase_hot_notes} onChange={set('purchase_hot_notes')} placeholder="Shown as a must-see warning on the account" />
           </div>
+
+          {editing && (
+            <div className="field full">
+              <label>Contacts</label>
+              {contacts.map((c, i) => (
+                <div key={c.id ?? `new-${i}`} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center', opacity: c.active === false ? 0.45 : 1 }}>
+                  <input style={{ flex: 2 }} placeholder="Name" value={F(c.name)} onChange={(e) => setContact(i, 'name', e.target.value)} />
+                  <input style={{ flex: 3 }} placeholder="Email" value={F(c.email)} onChange={(e) => setContact(i, 'email', e.target.value)} />
+                  <input style={{ flex: 2 }} placeholder="Phone" value={F(c.phone)} onChange={(e) => setContact(i, 'phone', e.target.value)} />
+                  <label className="checkline" style={{ padding: 0, fontSize: 11.5, whiteSpace: 'nowrap' }} title="Default contact">
+                    <input type="checkbox" checked={!!c.is_default} onChange={(e) => setContact(i, 'is_default', e.target.checked)} /> def
+                  </label>
+                  <button type="button" title={c.active === false ? 'Reactivate' : 'Deactivate'}
+                    style={{ background: 'none', border: 0, color: 'var(--ink-soft)', fontSize: 14 }}
+                    onClick={() => setContact(i, 'active', c.active === false)}>
+                    {c.active === false ? '↺' : '×'}
+                  </button>
+                </div>
+              ))}
+              <button type="button" className="btn ghost sm" onClick={() => setContacts([...contacts, newContact()])}>+ Add contact</button>
+            </div>
+          )}
         </div>
         <div className="form-actions">
           <button type="button" className="btn ghost" onClick={close}>Cancel</button>

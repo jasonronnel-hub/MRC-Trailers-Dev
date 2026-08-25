@@ -76,7 +76,7 @@ export default function Buyers({ data, role, refresh }) {
       )}
 
       {drawerParty && (
-        <PartyDrawer party={drawerParty} orders={orders} close={() => setDrawerParty(null)}
+        <PartyDrawer party={drawerParty} orders={orders} role={role} close={() => setDrawerParty(null)}
           onEdit={can(role, 'editParty') ? () => setFormParty(drawerParty) : null} />
       )}
       {formParty && (

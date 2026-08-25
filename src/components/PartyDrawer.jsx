@@ -1,9 +1,11 @@
 import { DEDUCTION_LABELS, formatPrice } from '../lib/api'
+import { useNotes, PopupBanners, NotesList } from './Notes'
 
-export default function PartyDrawer({ party: p, orders, close, onEdit }) {
+export default function PartyDrawer({ party: p, orders, role, close, onEdit }) {
   const isBuyer = p.group?.name === 'Trailer Buyer'
   const partyOrders = orders.filter((o) => o.buyer?.id === p.id)
   const contacts = (p.contacts || []).filter((c) => c.active !== false)
+  const notesState = useNotes('party', p.id)
 
   return (
     <div className="drawer-wrap" onClick={close}>
@@ -28,6 +30,7 @@ export default function PartyDrawer({ party: p, orders, close, onEdit }) {
               <b>No destruction agreement on file</b> — do not ship FedEx/Walmart units to this yard.
             </div>
           )}
+          <PopupBanners popups={notesState.popups} />
 
           <dl className="kv">
             <dt>Group</dt>
@@ -83,6 +86,8 @@ export default function PartyDrawer({ party: p, orders, close, onEdit }) {
               </div>
             )) : <div className="muted" style={{ fontSize: 13 }}>None yet.</div>}
           </>)}
+
+          <NotesList entityType="party" entityId={p.id} notesState={notesState} role={role} />
         </div>
       </div>
     </div>

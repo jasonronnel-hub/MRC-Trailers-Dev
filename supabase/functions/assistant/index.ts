@@ -19,7 +19,7 @@ const corsHeaders = {
 }
 
 function buildSystemPrompt(snapshot) {
-  const { buyers = [], orders = [], statusCounts = {}, unitCount = 0 } = snapshot || {}
+  const { buyers = [], orders = [], statusCounts = {}, unitCount = 0, haulers = [], dispatches = [] } = snapshot || {}
   const buyerLines = buyers
     .map((b) => `${b.name} [id ${b.id}, ${b.deduction_model || 'no deduction model set'}${b.destruction_agreement_signed ? '' : ', NO destruction agmt'}]`)
     .join('; ')
@@ -40,13 +40,16 @@ ACTION TYPES (include only what's needed; use [] for pure questions):
 - add_units: {type,units:[{unit_number,vin,source(fleet name),equipment_type,physical_location?,pickup_location_code?,pickup_address?,condition_comments?,purchase_price?}]}
 - attach_units: {type,buyer?,salesOrder?:"<SO # or ref>",units:{ids?:[],unitNumbers?:[],source?,status?,equipmentType?,physicalLocation?}} // attaching flips units to Sold — Dispatch Required
 - set_status: {type,status:<one of the exact status strings>,units:{...same selector...}}
-- add_note: {type,note,buyer?:"<name>"} OR {type,note,units:{...selector...}} // buyer notes append to the account; unit notes are logged per-unit
+- add_note: {type,note,popup?(bool — must-see warning),buyer?:"<name>"} OR {type,note,popup?,units:{...selector...}}
+- create_dispatch: {type,hauler:"<freight company name>",pickup_location?,pickup_address?,destination:"<buying yard name>",destination_address?,scheduled_pickup?(YYYY-MM-DD),delivery_eta?,rate?,rate_basis?("flat"|"per_unit"|"per_mile"),notes?}
+- assign_dispatch: {type,dispatch:"<D-#### or blank for the newest open one>",units:{...selector...}} // assigned units flip to Dispatched — Delivery Required and pick up the hauler
+- mark_delivered: {type,units:{...selector...}} // flips to Delivered — Invoice Required with today as completion date
 
 EXACT status strings: "Purchased Not Ready", "Ready — Sales Required", "Sold — Dispatch Required", "Dispatched — Delivery Required", "Delivered — Invoice Required", "Invoiced — Closed".
 
 RULES: Match buyers/orders by name loosely. Never invent data the user didn't give — leave optional fields out. If a buyer has NO destruction agreement and the user tries to attach FedEx or Walmart units to them, still build the action but add a warning in "reply". Put buyer confirmation-email text or pricing memos into header_notes/general_notes. For customer_reference use ABBREV MONTH + 2-digit year like "AUG 26".
 
-CURRENT DATA — buyers: ${buyerLines || '(none)'}. Open orders: ${orderLines || '(none)'}. Unit counts: ${countLine || '(none)'}. Total units: ${unitCount}.
+CURRENT DATA — buyers: ${buyerLines || '(none)'}. Open orders: ${orderLines || '(none)'}. Haulers: ${haulers.map((h) => h.name).join('; ') || '(none)'}. Open dispatches: ${dispatches.map((d) => `${d.dispatch_number} (${d.hauler_name || '?'} → ${d.destination_name || '?'})`).join('; ') || '(none)'}. Unit counts: ${countLine || '(none)'}. Total units: ${unitCount}.
 Answer data questions using this snapshot in "reply" with actions:[].`
 }
 

@@ -6,6 +6,7 @@
 import {
   can, saveParty, saveOrder, nextOrderNumber, addUnits,
   attachUnits, setUnitsStatus, addNote,
+  saveDispatch, nextDispatchNumber, assignUnitsToDispatch, markUnitsDelivered,
 } from './api'
 
 // Compact snapshot sent to the edge function — enough for the model to match
@@ -26,7 +27,13 @@ export function buildSnapshot(data) {
   const statusCounts = {}
   for (const s of data.statuses) statusCounts[s.name] = 0
   for (const u of data.units) if (u.status) statusCounts[u.status.name] = (statusCounts[u.status.name] || 0) + 1
-  return { buyers, orders, statusCounts, unitCount: data.units.length }
+  const haulers = data.parties
+    .filter((p) => ['Freight', 'Rail Freight'].includes(p.group?.name))
+    .map((p) => ({ id: p.id, name: p.name }))
+  const dispatches = (data.dispatches || [])
+    .filter((d) => !d.cancelled)
+    .map((d) => ({ dispatch_number: d.dispatch_number, hauler_name: d.hauler?.name, destination_name: d.destination?.name }))
+  return { buyers, orders, statusCounts, unitCount: data.units.length, haulers, dispatches }
 }
 
 function resolveBuyer(parties, ref) {
@@ -137,17 +144,49 @@ export async function applyActions(data, actions, role) {
         const matches = selectUnits(units, a.units || a.select || {})
         await setUnitsStatus(matches.map((u) => u.id), sid)
         log.push(`Moved ${matches.length} unit${matches.length !== 1 ? 's' : ''} → ${a.status}`)
+      } else if (a.type === 'create_dispatch') {
+        if (!can(role, 'createDispatch')) { log.push(`⚠︎ Your role can't create dispatches — that's logistics/admin.`); continue }
+        const hauler = resolveBuyer(parties, a.hauler)
+        const dest = resolveBuyer(parties, a.destination)
+        const dispatch_number = nextDispatchNumber(data.dispatches || [])
+        await saveDispatch({
+          dispatch_number,
+          hauler_party_id: hauler?.id ?? null,
+          destination_party_id: dest?.id ?? null,
+          pickup_location: a.pickup_location ?? null, pickup_address: a.pickup_address ?? null,
+          destination_address: a.destination_address ?? null,
+          scheduled_pickup: a.scheduled_pickup ?? null, delivery_eta: a.delivery_eta ?? null,
+          rate: a.rate ?? null, rate_basis: a.rate_basis ?? 'flat',
+          notes: a.notes ?? null,
+        })
+        log.push(`Created ${dispatch_number}${hauler ? ` with ${hauler.name}` : ''}${dest ? ` → ${dest.name}` : ''}`)
+      } else if (a.type === 'assign_dispatch') {
+        if (!can(role, 'editDispatch')) { log.push(`⚠︎ Your role can't assign dispatches.`); continue }
+        const open = (data.dispatches || []).filter((d) => !d.cancelled)
+        const ref = (a.dispatch || '').toLowerCase()
+        const d = ref
+          ? open.find((x) => x.dispatch_number.toLowerCase() === ref)
+          : open[open.length - 1]
+        if (!d) { log.push(`⚠︎ Couldn't find dispatch "${a.dispatch || '(latest)'}"`); continue }
+        const matches = selectUnits(units, a.units || a.select || {}).filter((u) => !u.dispatch?.id)
+        await assignUnitsToDispatch(d.id, matches.map((u) => u.id))
+        log.push(`Assigned ${matches.length} unit${matches.length !== 1 ? 's' : ''} to ${d.dispatch_number} → Dispatched`)
+      } else if (a.type === 'mark_delivered') {
+        if (!can(role, 'editDispatch')) { log.push(`⚠︎ Your role can't mark deliveries.`); continue }
+        const matches = selectUnits(units, a.units || a.select || {})
+        await markUnitsDelivered(matches.map((u) => u.id), statusId('Delivered — Invoice Required'))
+        log.push(`Marked ${matches.length} unit${matches.length !== 1 ? 's' : ''} delivered`)
       } else if (a.type === 'add_note') {
         if (!can(role, 'addNote')) { log.push(`⚠︎ Your role can't add notes.`); continue }
         if (a.buyer || a.buyerName) {
           const b = resolveBuyer(parties, a.buyer || a.buyerName)
           if (!b) { log.push(`⚠︎ Couldn't find buyer "${a.buyer || a.buyerName}"`); continue }
-          await saveParty({ general_notes: b.general_notes ? `${b.general_notes}\n${a.note}` : a.note }, b.id)
-          log.push(`Note added to "${b.name}"`)
+          await addNote('party', b.id, a.note, !!a.popup)
+          log.push(`Note added to "${b.name}"${a.popup ? ' (pop-up warning)' : ''}`)
         } else {
           const matches = selectUnits(units, a.units || a.select || {})
-          for (const u of matches) await addNote('unit', u.id, a.note)
-          log.push(`Note added to ${matches.length} unit${matches.length !== 1 ? 's' : ''}`)
+          for (const u of matches) await addNote('unit', u.id, a.note, !!a.popup)
+          log.push(`Note added to ${matches.length} unit${matches.length !== 1 ? 's' : ''}${a.popup ? ' (pop-up warning)' : ''}`)
         }
       } else {
         log.push(`⚠︎ Unknown action: ${a.type}`)
