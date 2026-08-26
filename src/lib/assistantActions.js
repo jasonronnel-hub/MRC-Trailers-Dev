@@ -41,6 +41,18 @@ export function buildSnapshot(data, counts) {
   return { buyers, orders, statusCounts, unitCount, haulers, dispatches }
 }
 
+// Loose name match against the payment_terms lookup — "net 30" -> "Net 30
+// Days". Returns the id, or null (never invents a term or silently drops
+// the request into the wrong bucket).
+function resolvePaymentTermsId(paymentTerms, text) {
+  if (!text) return null
+  const r = String(text).toLowerCase().replace(/\s+/g, ' ').trim()
+  const exact = paymentTerms.find((t) => t.name.toLowerCase() === r)
+  if (exact) return exact.id
+  const loose = paymentTerms.find((t) => t.name.toLowerCase().includes(r) || r.includes(t.name.toLowerCase()))
+  return loose?.id ?? null
+}
+
 function resolveBuyer(parties, ref) {
   if (!ref) return null
   const r = String(ref).toLowerCase()
@@ -77,7 +89,7 @@ function selectUnits(units, sel) {
 // throws only on unexpected DB errors (permission denials are logged, not thrown).
 export async function applyActions(data, actions, role) {
   const log = []
-  const { parties, orders, statuses, equipTypes } = data
+  const { parties, orders, statuses, equipTypes, paymentTerms = [] } = data
   // Unit selectors operate over the ACTIVE pipeline (fetched fresh, bounded
   // by how the business runs) — the assistant never needs closed history.
   const needsUnits = (actions || []).some((a) =>
@@ -94,7 +106,8 @@ export async function applyActions(data, actions, role) {
         const buyerGroupId = parties.find((p) => p.group?.name === 'Trailer Buyer')?.group?.id
         await saveParty({
           name: a.name, group_id: buyerGroupId ?? null,
-          billing_address: a.billing_address ?? null, payment_terms: a.payment_terms ?? null,
+          billing_address: a.billing_address ?? null,
+          payment_terms_id: resolvePaymentTermsId(paymentTerms, a.payment_terms),
           payment_method: a.payment_method ?? null, deduction_model: a.deduction_model ?? null,
           standard_deductions: a.standard_deductions ?? null,
           destruction_agreement_signed: a.destruction_agreement_signed ?? null,
@@ -106,7 +119,8 @@ export async function applyActions(data, actions, role) {
         if (!can(role, 'editParty')) { log.push(`⚠︎ Your role can't edit accounts.`); continue }
         const b = resolveBuyer(parties, a.buyer || a.buyerId || a.name)
         if (!b) { log.push(`⚠︎ Couldn't find buyer "${a.buyer || a.name}"`); continue }
-        const { type, buyer, buyerId, ...fields } = a
+        const { type, buyer, buyerId, payment_terms, ...fields } = a
+        if (payment_terms !== undefined) fields.payment_terms_id = resolvePaymentTermsId(paymentTerms, payment_terms)
         await saveParty(fields, b.id)
         log.push(`Updated buyer "${b.name}"`)
       } else if (a.type === 'create_order') {

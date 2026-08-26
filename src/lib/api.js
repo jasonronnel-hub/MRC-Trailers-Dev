@@ -27,17 +27,18 @@ export const UNIT_SELECT = `
 `
 
 export async function fetchAll() {
-  const [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches, invoices] = await Promise.all([
+  const [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches, invoices, paymentTerms] = await Promise.all([
     supabase.from('unit_statuses').select('id, name, sort_order').order('sort_order'),
     supabase.from('parties').select(`
       id, name, billing_address, city, state, zip,
-      payment_terms, payment_method, credit_limit,
+      payment_method, credit_limit,
       deduction_model, standard_deductions, destruction_agreement_signed,
       rema_member, merged_parent, general_notes, trucking_notes,
       purchase_hot_notes, report_recipients, active,
       group:party_groups ( id, name ),
       contacts:party_contacts ( id, name, email, phone, is_default, active ),
-      deductions:party_deductions ( id, description, kind, basis, rate )
+      deductions:party_deductions ( id, description, kind, basis, rate ),
+      payment_terms:payment_terms ( id, name )
     `).eq('active', true).order('name').limit(10000),
     supabase.from('sales_orders').select(`
       id, order_number, customer_reference, item_code, price, price_unit,
@@ -64,12 +65,13 @@ export async function fetchAll() {
       buyer:parties ( id, name ),
       units ( count )
     `).eq('voided', false).order('id', { ascending: false }).limit(10000),
+    supabase.from('payment_terms').select('id, name, active').order('sort_order'),
   ])
-  for (const r of [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches, invoices]) if (r.error) throw r.error
+  for (const r of [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches, invoices, paymentTerms]) if (r.error) throw r.error
   return {
     statuses: statuses.data, parties: parties.data, orders: orders.data,
     groups: groups.data, equipTypes: equipTypes.data, titleTypes: titleTypes.data,
-    dispatches: dispatches.data, invoices: invoices.data,
+    dispatches: dispatches.data, invoices: invoices.data, paymentTerms: paymentTerms.data,
   }
 }
 

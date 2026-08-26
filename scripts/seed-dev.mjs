@@ -27,27 +27,29 @@ for (const [t, pk] of WIPE) {
 }
 
 // ---- lookups ----------------------------------------------------------------
-const [{ data: groups }, { data: equips }, { data: statuses }, { data: titles }] = await Promise.all([
+const [{ data: groups }, { data: equips }, { data: statuses }, { data: titles }, { data: terms }] = await Promise.all([
   db.from('party_groups').select('id, name'),
   db.from('equipment_types').select('id, name'),
   db.from('unit_statuses').select('id, name'),
   db.from('title_types').select('id, name'),
+  db.from('payment_terms').select('id, name'),
 ])
 const groupId = (n) => groups.find((g) => g.name === n)?.id
 const equipId = (n) => equips.find((e) => e.name === n)?.id
 const statusId = (n) => statuses.find((s) => s.name === n)?.id
 const titleId = (n) => titles.find((t) => t.name === n)?.id
+const termsId = (n) => terms.find((t) => t.name === n)?.id
 
 // ---- parties ----------------------------------------------------------------
 console.log('Seeding parties…')
 const SUPPLIERS = ['FedEx Ground', 'Walmart', 'Union Pacific', 'Hub Group', 'JB Hunt', 'Milestone']
 const buyers = [
-  { name: 'SA Recycling', group: 'Trailer Buyer', billing_address: 'Anaheim, CA', payment_terms: 'Net 30', payment_method: 'ACH', deduction_model: 'none', standard_deductions: 'None — blended price', destruction_agreement_signed: '2025-03-14', rema_member: true, general_notes: 'Blended price, no deductions. ANY deduction on their ticket is a mistake — call TJ.', contact: { name: 'Mike Delgado', email: 'scale@sarecycling.example' } },
-  { name: 'Sims Metal Management', group: 'Trailer Buyer', billing_address: 'Richmond, VA (central billing)', payment_terms: 'Net 30', payment_method: 'Check', deduction_model: 'standard', standard_deductions: 'Wood floor 2,000 lb; tires $10/ea', deductions: [{ description: 'Wood floor', kind: 'weight', basis: 'per_unit', rate: 2000 }, { description: 'Tires', kind: 'dollars', basis: 'per_tire', rate: 10 }], destruction_agreement_signed: '2024-11-02', rema_member: true, merged_parent: true, general_notes: 'MERGED account. Set Sims as Sold-To; put the actual yard in Sales Location.', contact: { name: 'AR Dept', email: 'ap@simsmm.example' } },
-  { name: 'Pacific Steel & Recycling', group: 'Trailer Buyer', billing_address: 'Great Falls, MT', payment_terms: 'Net 30', payment_method: 'ACH', deduction_model: 'standard', standard_deductions: 'Wood floor 2,500 lb', deductions: [{ description: 'Wood floor', kind: 'weight', basis: 'per_unit', rate: 2500 }], destruction_agreement_signed: '2025-06-20', rema_member: true, general_notes: 'Strong long-standing relationship. Bozeman haul is tight on freight.', contact: { name: 'Sam Wilson', email: 'sam@pacificsteel.example' } },
+  { name: 'SA Recycling', group: 'Trailer Buyer', billing_address: 'Anaheim, CA', payment_terms: 'Net 30 Days', payment_method: 'ACH', deduction_model: 'none', standard_deductions: 'None — blended price', destruction_agreement_signed: '2025-03-14', rema_member: true, general_notes: 'Blended price, no deductions. ANY deduction on their ticket is a mistake — call TJ.', contact: { name: 'Mike Delgado', email: 'scale@sarecycling.example' } },
+  { name: 'Sims Metal Management', group: 'Trailer Buyer', billing_address: 'Richmond, VA (central billing)', payment_terms: 'Net 30 Days', payment_method: 'Check', deduction_model: 'standard', standard_deductions: 'Wood floor 2,000 lb; tires $10/ea', deductions: [{ description: 'Wood floor', kind: 'weight', basis: 'per_unit', rate: 2000 }, { description: 'Tires', kind: 'dollars', basis: 'per_tire', rate: 10 }], destruction_agreement_signed: '2024-11-02', rema_member: true, merged_parent: true, general_notes: 'MERGED account. Set Sims as Sold-To; put the actual yard in Sales Location.', contact: { name: 'AR Dept', email: 'ap@simsmm.example' } },
+  { name: 'Pacific Steel & Recycling', group: 'Trailer Buyer', billing_address: 'Great Falls, MT', payment_terms: 'Net 30 Days', payment_method: 'ACH', deduction_model: 'standard', standard_deductions: 'Wood floor 2,500 lb', deductions: [{ description: 'Wood floor', kind: 'weight', basis: 'per_unit', rate: 2500 }], destruction_agreement_signed: '2025-06-20', rema_member: true, general_notes: 'Strong long-standing relationship. Bozeman haul is tight on freight.', contact: { name: 'Sam Wilson', email: 'sam@pacificsteel.example' } },
   { name: 'Clark Iron & Metal', group: 'Trailer Buyer', billing_address: 'Murfreesboro, TN', payment_terms: 'COD', payment_method: 'Check', deduction_model: 'variable', general_notes: 'NEW yard, cold-called. No destruction agreement on file — do NOT ship FedEx/Walmart until signed.', contact: { name: 'front desk' } },
-  { name: 'Western Metals', group: 'Trailer Buyer', billing_address: 'Salt Lake City, UT', payment_terms: 'Net 30', payment_method: 'ACH', deduction_model: 'standard', standard_deductions: 'Wood floor 2,000 lb', deductions: [{ description: 'Wood floor', kind: 'weight', basis: 'per_unit', rate: 2000 }], destruction_agreement_signed: '2025-01-09', rema_member: true, contact: { name: 'RJ', email: 'rj@westernmetals.example' } },
-  { name: 'Nashville Heavy Haul', group: 'Freight', billing_address: 'Nashville, TN', payment_terms: 'Net 15', payment_method: 'ACH', general_notes: 'Hauler. Good for TN/KY single-unit tows.', trucking_notes: 'Good for TN/KY single-unit tows.', contact: { name: 'dispatch', email: 'dispatch@nhh.example' } },
+  { name: 'Western Metals', group: 'Trailer Buyer', billing_address: 'Salt Lake City, UT', payment_terms: 'Net 30 Days', payment_method: 'ACH', deduction_model: 'standard', standard_deductions: 'Wood floor 2,000 lb', deductions: [{ description: 'Wood floor', kind: 'weight', basis: 'per_unit', rate: 2000 }], destruction_agreement_signed: '2025-01-09', rema_member: true, contact: { name: 'RJ', email: 'rj@westernmetals.example' } },
+  { name: 'Nashville Heavy Haul', group: 'Freight', billing_address: 'Nashville, TN', payment_terms: 'Net 15 Days', payment_method: 'ACH', general_notes: 'Hauler. Good for TN/KY single-unit tows.', trucking_notes: 'Good for TN/KY single-unit tows.', contact: { name: 'dispatch', email: 'dispatch@nhh.example' } },
 ]
 
 const partyIds = {}
@@ -58,9 +60,9 @@ for (const name of SUPPLIERS) {
   partyIds[name] = data.id
 }
 for (const b of buyers) {
-  const { contact, deductions, group, ...fields } = b
+  const { contact, deductions, group, payment_terms, ...fields } = b
   const { data, error } = await db.from('parties')
-    .insert({ ...fields, group_id: groupId(group) }).select('id').single()
+    .insert({ ...fields, group_id: groupId(group), payment_terms_id: termsId(payment_terms) }).select('id').single()
   die(`buyer ${b.name}`, error)
   partyIds[b.name] = data.id
   if (contact) {

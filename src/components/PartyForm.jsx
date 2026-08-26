@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import Modal from './Modal'
+import SearchSelect from './SearchSelect'
 import { saveParty, saveContact, saveDeduction, deleteDeduction } from '../lib/api'
 
 const F = (v) => v ?? ''
 const newContact = () => ({ id: null, name: '', email: '', phone: '', is_default: false, active: true, _dirty: true })
 const newDeduction = () => ({ id: null, description: '', kind: 'weight', basis: 'per_unit', rate: '', _dirty: true })
 
-export default function PartyForm({ party, groups, close, onSaved }) {
+export default function PartyForm({ party, groups, paymentTerms, close, onSaved }) {
   const editing = !!party
   const [contacts, setContacts] = useState(
     (party?.contacts || []).map((c) => ({ ...c, _dirty: false })),
@@ -33,7 +34,7 @@ export default function PartyForm({ party, groups, close, onSaved }) {
     name: F(party?.name),
     group_id: party?.group?.id ?? groups.find((g) => g.name === 'Trailer Buyer')?.id ?? '',
     billing_address: F(party?.billing_address),
-    payment_terms: F(party?.payment_terms),
+    payment_terms_id: party?.payment_terms?.id ?? '',
     payment_method: F(party?.payment_method),
     deduction_model: F(party?.deduction_model),
     standard_deductions: F(party?.standard_deductions),
@@ -56,6 +57,7 @@ export default function PartyForm({ party, groups, close, onSaved }) {
       await saveParty({
         ...f,
         group_id: f.group_id || null,
+        payment_terms_id: f.payment_terms_id || null,
         deduction_model: f.deduction_model || null,
         destruction_agreement_signed: f.destruction_agreement_signed || null,
       }, party?.id)
@@ -99,7 +101,10 @@ export default function PartyForm({ party, groups, close, onSaved }) {
           </div>
           <div className="field">
             <label>Payment terms</label>
-            <input value={f.payment_terms} onChange={set('payment_terms')} placeholder="Net 30" />
+            <SearchSelect placeholder="Type to find terms…" style={{ width: '100%' }}
+              options={paymentTerms.filter((t) => t.active).map((t) => ({ id: t.id, label: t.name }))}
+              value={f.payment_terms_id}
+              onChange={(v) => setF({ ...f, payment_terms_id: v })} />
           </div>
           <div className="field">
             <label>Payment method</label>

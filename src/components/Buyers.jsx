@@ -4,7 +4,7 @@ import PartyDrawer from './PartyDrawer'
 import PartyForm from './PartyForm'
 
 export default function Buyers({ data, role, refresh }) {
-  const { parties, orders, groups } = data
+  const { parties, orders, groups, paymentTerms } = data
   const [groupFilter, setGroupFilter] = useState('Trailer Buyer')
   const [q, setQ] = useState('')
   const [drawerParty, setDrawerParty] = useState(null)
@@ -67,7 +67,7 @@ export default function Buyers({ data, role, refresh }) {
                   </td>
                   <td><span className="tag">{p.group?.name || '—'}</span></td>
                   <td>{DEDUCTION_LABELS[p.deduction_model] || <span className="muted">—</span>}</td>
-                  <td className="muted">{[p.payment_terms, p.payment_method].filter(Boolean).join(' · ') || '—'}</td>
+                  <td className="muted">{[p.payment_terms?.name, p.payment_method].filter(Boolean).join(' · ') || '—'}</td>
                   <td>
                     {p.group?.name !== 'Trailer Buyer' ? <span className="muted">n/a</span>
                       : p.destruction_agreement_signed
@@ -90,7 +90,7 @@ export default function Buyers({ data, role, refresh }) {
           onEdit={can(role, 'editParty') ? () => setFormParty(drawerParty) : null} />
       )}
       {formParty && (
-        <PartyForm party={formParty === 'new' ? null : formParty} groups={groups}
+        <PartyForm party={formParty === 'new' ? null : formParty} groups={groups} paymentTerms={paymentTerms}
           close={() => setFormParty(null)} onSaved={saved} />
       )}
     </div>

@@ -69,16 +69,30 @@ const STATUS_MAP = {
 const TITLE_MAP = { 1: 'Original', 2: 'Bill of Sale' }
 
 // ---------- lookups from the live DB ----------
-const [{ data: groups }, { data: statuses }, { data: titles }, { data: equipTypes }] = await Promise.all([
+const [{ data: groups }, { data: statuses }, { data: titles }, { data: equipTypes }, { data: paymentTerms }] = await Promise.all([
   db.from('party_groups').select('id, name'),
   db.from('unit_statuses').select('id, name'),
   db.from('title_types').select('id, name'),
   db.from('equipment_types').select('id, name'),
+  db.from('payment_terms').select('id, name'),
 ])
 const groupId = (n) => groups.find((g) => g.name === n)?.id ?? null
 const statusIdByName = (n) => statuses.find((s) => s.name === n)?.id
 const titleId = (n) => titles.find((t) => t.name === n)?.id ?? null
 const equipIdByName = (n) => equipTypes.find((t) => t.name === n)?.id ?? null
+
+// Payment terms: ROM already constrained this to a fixed picklist (no dirty
+// free-text variants like sizes/makes), so an exact case/space-insensitive
+// match covers the vast majority. Unmatched values are dropped (counted
+// below) rather than guessed.
+let unmappedTerms = 0
+const termsIdFor = (text) => {
+  if (!text?.trim()) return null
+  const needle = text.trim().toLowerCase()
+  const hit = paymentTerms.find((t) => t.name.toLowerCase() === needle)
+  if (!hit) unmappedTerms++
+  return hit?.id ?? null
+}
 
 // PRIMARY type source: TrailerTypeInvID → EntInventory items (populated on
 // 23,080/23,081 units, clean values). The dirty TrailerSizes table is only
@@ -109,12 +123,13 @@ const partyRows = dealers.map((d) => ({
   group_id: groupId(GROUP_MAP[int(d.group_id)] ?? 'Other'),
   billing_address: d.billing_address, city: d.city, state: d.state, zip: d.zip,
   phone: d.phone1, email: d.email,
-  payment_terms: d.payment_terms, credit_limit: num(d.credit_limit),
+  payment_terms_id: termsIdFor(d.payment_terms), credit_limit: num(d.credit_limit),
   general_notes: d.notes, purchase_hot_notes: d.purchase_hot_notes,
   trucking_notes: d.trucking_notes,
   active: d.active !== '0',
 })).filter((p) => p.legacy_dealer_id != null)
 await upsert('parties', partyRows, 'legacy_dealer_id', 'parties')
+if (unmappedTerms) console.log(`  (${unmappedTerms} dealers had a payment_terms value not in the payment_terms lookup — left null)`)
 
 const partyIds = await fetchAllRows('parties', 'id, legacy_dealer_id', (q) => q.not('legacy_dealer_id', 'is', null))
 const party = new Map(partyIds.map((p) => [p.legacy_dealer_id, p.id]))

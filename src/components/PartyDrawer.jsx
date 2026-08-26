@@ -49,7 +49,7 @@ export default function PartyDrawer({ party: p, orders, dispatches = [], role, c
               {p.merged_parent && <span className="tag" style={{ marginLeft: 6 }}>merged parent</span>}
             </dd>
             <dt>Billing</dt><dd>{p.billing_address || '—'}</dd>
-            <dt>Terms</dt><dd>{[p.payment_terms, p.payment_method].filter(Boolean).join(' · ') || '—'}</dd>
+            <dt>Terms</dt><dd>{[p.payment_terms?.name, p.payment_method].filter(Boolean).join(' · ') || '—'}</dd>
             {isBuyer && (<>
               <dt>Deductions</dt>
               <dd>
