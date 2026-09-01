@@ -1,13 +1,25 @@
 import { useState } from 'react'
 import Modal from './Modal'
 import SearchSelect from './SearchSelect'
+import { shortLocation } from '../lib/location'
 import { saveDispatch, nextDispatchNumber } from '../lib/api'
 
 const F = (v) => v ?? ''
 
 export default function DispatchForm({ dispatch, dispatches, parties, close, onSaved }) {
   const editing = !!dispatch
-  const haulers = parties.filter((p) => ['Freight', 'Rail Freight'].includes(p.group?.name))
+  // Kim picks haulers by where they are as much as who they are. Each option
+  // carries "Name · City, ST" (from the billing address), and a location box
+  // narrows the list by city or state before the name search.
+  const [haulerLoc, setHaulerLoc] = useState('')
+  const haulerPlace = (h) => shortLocation(null, h.billing_address) || h.state || ''
+  const haulers = parties
+    .filter((p) => ['Freight', 'Rail Freight'].includes(p.group?.name))
+    .filter((h) => {
+      const needle = haulerLoc.trim().toLowerCase()
+      if (!needle) return true
+      return `${haulerPlace(h)} ${h.billing_address || ''} ${h.state || ''}`.toLowerCase().includes(needle)
+    })
   const buyers = parties.filter((p) => p.group?.name === 'Trailer Buyer')
   const [f, setF] = useState({
     hauler_party_id: dispatch?.hauler?.id ?? '',
@@ -53,9 +65,15 @@ export default function DispatchForm({ dispatch, dispatches, parties, close, onS
       <form onSubmit={submit}>
         <div className="form-grid">
           <div className="field">
+            <label>Hauler location</label>
+            <input value={haulerLoc} onChange={(e) => setHaulerLoc(e.target.value)}
+              placeholder="City or state, e.g. Nashville or TN" autoFocus />
+            <div className="fieldnote">{haulerLoc.trim() ? `${haulers.length} hauler${haulers.length === 1 ? '' : 's'} match` : 'Narrows the hauler list below'}</div>
+          </div>
+          <div className="field">
             <label>Hauler</label>
-            <SearchSelect autoFocus placeholder="Type to find a hauler…" style={{ width: '100%' }}
-              options={haulers.map((h) => ({ id: h.id, label: h.name }))}
+            <SearchSelect placeholder="Type to find a hauler…" style={{ width: '100%' }}
+              options={haulers.map((h) => ({ id: h.id, label: haulerPlace(h) ? `${h.name} · ${haulerPlace(h)}` : h.name }))}
               value={f.hauler_party_id}
               onChange={(v) => setF({ ...f, hauler_party_id: v })} />
           </div>

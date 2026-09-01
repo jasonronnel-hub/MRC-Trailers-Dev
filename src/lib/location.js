@@ -12,6 +12,39 @@ const STATE = '[A-Z]{2}'
 const CARRIER = /^(?:hub group|fxg|fedex(?: ground| freight)?|fec|walmart|wal-mart|ups|j\.?b\.? hunt|union pacific|up|milestone|schneider|swift|werner)\b[\s:]*/i
 
 const CITY_ST = new RegExp(`^(.+?)[\\s,]+(${STATE})$`)
+const PROVINCE = {
+  ontario: 'ON', quebec: 'QC', alberta: 'AB', 'british columbia': 'BC', manitoba: 'MB',
+  saskatchewan: 'SK', 'nova scotia': 'NS', 'new brunswick': 'NB',
+}
+// "MEMPHIS" -> "Memphis"; leaves mixed case ("St. Peters", "LA Basin") alone.
+const titleCity = (c) => {
+  const s = c.trim().replace(/,$/, '')
+  return s === s.toUpperCase() && /[A-Z]{3}/.test(s)
+    ? s.toLowerCase().replace(/(^|[\s\-./'])([a-z])/g, (_, p, ch) => p + ch.toUpperCase())
+    : s
+}
+
+// Stations ROM names by city only. ROM carries no evidence for these (the
+// carriers' dealer records are corporate HQs), so the state is deduced from
+// geography — every entry here is the only city of that name a Hub Group /
+// FedEx Ground yard could be in. Kansas City (MO/KS) is deliberately absent:
+// it is ambiguous, so it stays city-only until TJ confirms.
+const KNOWN_CITY = {
+  'dallas': 'Dallas, TX',
+  'la': 'Los Angeles, CA',            // Hub Group LA-TI / LA-SB
+  'los angeles': 'Los Angeles, CA',
+  'st. louis': 'St. Louis, MO',
+  'st louis': 'St. Louis, MO',
+  'indianapolis': 'Indianapolis, IN',
+  'buffalo': 'Buffalo, NY',
+  'sudbury': 'Sudbury, ON',
+  'nanaiumo': 'Nanaimo, BC',          // ROM's spelling
+  'nanaimo': 'Nanaimo, BC',
+  'lethbridge': 'Lethbridge, AB',
+  'ottawa': 'Ottawa, ON',
+  'north calgary': 'North Calgary, AB',
+  'calgary': 'Calgary, AB',
+}
 
 export function shortLocation(name, address) {
   const raw = (name || '').trim()
@@ -25,10 +58,17 @@ export function shortLocation(name, address) {
     const m = segs[i].replace(CARRIER, '').match(CITY_ST)
     if (m && !/\d/.test(m[1])) return `${m[1].trim()}, ${m[2]}`
   }
-  // address: last line "City, ST 97060"
-  const last = (address || '').trim().split('\n').map((l) => l.trim()).filter(Boolean).pop() || ''
-  const m = last.match(new RegExp(`^(.+?),\\s*(${STATE})\\b`))
-  if (m) return `${m[1].trim()}, ${m[2]}`
+  // address: the last line that looks like "City, ST 97060" — walking up past
+  // a trailing "Canada" line. Tolerates a lowercase state ("Denver, Co"), a
+  // missing comma ("Beaumont TX 77726"), and a spelled-out province.
+  const lines = (address || '').split('\n').map((l) => l.trim()).filter(Boolean)
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i].replace(/\b(canada|usa)$/i, '').trim()
+    let m = line.match(/^(.+?)[\s,]+([A-Za-z]{2})\.?(?:\s+[A-Za-z0-9][A-Za-z0-9 -]*)?$/)
+    if (m && !/\d/.test(m[1]) && !/\b(po box|unit|suite|ste|c\/o)\b/i.test(m[1])) return `${titleCity(m[1])}, ${m[2].toUpperCase()}`
+    m = line.match(/^(.+?)[\s,]+(ontario|quebec|qu[ée]bec|alberta|british columbia|manitoba|saskatchewan|nova scotia|new brunswick)\b/i)
+    if (m) return `${titleCity(m[1])}, ${PROVINCE[m[2].toLowerCase().replace('é', 'e')]}`
+  }
   // No state anywhere ("Hub Group Dallas -G", "JB Hunt - Kansas City"):
   // the city alone beats the raw string. Drop the carrier and any "-G"/"-TI"
   // station suffix.
@@ -36,6 +76,7 @@ export function shortLocation(name, address) {
   const tail = [...segs].reverse()
     .map((s) => s.replace(CARRIER, '').replace(/\s*-\S*$/, '').trim())
     .find((s) => /[a-z]/i.test(s))
+  if (tail && KNOWN_CITY[tail.toLowerCase()]) return KNOWN_CITY[tail.toLowerCase()]
   return tail || raw || null
 }
 
