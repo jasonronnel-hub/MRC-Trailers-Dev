@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import Pill from './Pill'
 import { useNotes, PopupBanners, NotesList } from './Notes'
-import { fetchStatusLog } from '../lib/api'
+import { fetchStatusLog, unitLocation } from '../lib/api'
 
 const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString())
 
@@ -70,7 +70,7 @@ export default function UnitDrawer({ unit, statuses, role, close, onEdit, onWeig
                 </div>
               )}
             </dd>
-            <dt>Location</dt><dd>{unit.physical_location || '—'}</dd>
+            <dt>Location</dt><dd>{unitLocation(unit) || '—'}</dd>
             <dt>Purchase location</dt>
             <dd>
               {unit.purchase_location || unit.pickup_location_code || '—'}

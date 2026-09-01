@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Modal from './Modal'
 import Pill from './Pill'
-import { attachUnits, fetchUnitsPage } from '../lib/api'
+import { attachUnits, fetchUnitsPage, unitLocation } from '../lib/api'
 
 // Attaching works off an EXPLICITLY checked list of units — never "everything
 // in the current view" (Spec §2.6). Candidates are fetched from the server
@@ -92,7 +92,7 @@ export default function AttachUnitsModal({ order, statuses, close, onSaved }) {
               <b>{u.unit_number || '—'}</b>
               <span className="muted">{u.equipment_type?.name}</span>
               <span className="muted">{u.source?.name}</span>
-              <span className="muted" style={{ marginLeft: 'auto' }}>{u.physical_location}</span>
+              <span className="muted" style={{ marginLeft: 'auto' }}>{unitLocation(u)}</span>
               <Pill status={u.status?.name} />
             </label>
           ))}

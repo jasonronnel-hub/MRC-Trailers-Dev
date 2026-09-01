@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Logo from './Logo'
-import { fetchActiveUnits } from '../lib/api'
+import { fetchActiveUnits, unitLocation } from '../lib/api'
 
 // Tuesday Report (Phase 3 strawman). Section choice is a first draft of
 // "what the division needs to see weekly" — Kim decides the real content.
@@ -42,7 +42,7 @@ export default function TuesdayReport({ data, counts, embedded = true }) {
         ['Dispatched — Delivery Required', dispatched.length],
         ['Delivered — Invoice Required', delivered.length],
       ],
-      readyByLocation: groupBy(ready, (u) => u.physical_location),
+      readyByLocation: groupBy(ready, (u) => unitLocation(u)),
       soldByBuyer: groupBy(sold, (u) => u.sold_to?.name),
       dispatched,
       delivered,

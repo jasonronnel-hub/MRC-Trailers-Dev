@@ -141,7 +141,7 @@ export async function fetchUnitsPage({ filters = {}, sort = {}, page = 0, pageSi
   if (filters.pickedUpSince) q = q.gte('pickup_date', filters.pickedUpSince)
   if (filters.q?.trim()) {
     const needle = filters.q.trim().replaceAll(',', ' ').replaceAll('%', '')
-    q = q.or(['unit_number', 'alt_unit_number', 'vin', 'physical_location']
+    q = q.or(['unit_number', 'alt_unit_number', 'vin', 'physical_location', 'purchase_location']
       .map((c) => `${c}.ilike.%${needle}%`).join(','))
   }
 
@@ -545,6 +545,11 @@ export async function fetchMyRole() {
 }
 
 export const DEDUCTION_LABELS = { none: 'No Deductions', standard: 'Standard', variable: 'Variable' }
+
+// Where the unit is right now. Units created in-app carry physical_location;
+// migrated ROM units carry the purchase contact (the FedEx/Walmart yard it
+// sits at until it ships). Until dispatch those are the same place.
+export const unitLocation = (u) => u.physical_location || u.purchase_location || null
 
 export function formatPrice(price, unit) {
   if (price == null) return '—'

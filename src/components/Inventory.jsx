@@ -7,7 +7,7 @@ import ImportModal from './ImportModal'
 import SellModal from './SellModal'
 import SearchSelect from './SearchSelect'
 import { statusMeta } from '../lib/statuses'
-import { can, fetchUnitsPage } from '../lib/api'
+import { can, fetchUnitsPage, unitLocation } from '../lib/api'
 
 const PAGE_SIZE = 50
 
@@ -206,7 +206,7 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
                   </td>
                   <td>{u.equipment_type?.name || <span className="muted">—</span>}</td>
                   <td>{u.source?.name || <span className="muted">—</span>}</td>
-                  <td className="muted">{u.physical_location || '—'}</td>
+                  <td className="muted">{unitLocation(u) || '—'}</td>
                   <td><Pill status={u.status?.name} /></td>
                   <td className="muted">{u.sold_to?.name || '—'}</td>
                   <td className="mono muted">{u.sales_order?.order_number || '—'}</td>

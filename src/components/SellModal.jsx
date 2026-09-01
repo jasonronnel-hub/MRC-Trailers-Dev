@@ -3,7 +3,7 @@ import Modal from './Modal'
 import SearchSelect from './SearchSelect'
 import PartyForm from './PartyForm'
 import Pill from './Pill'
-import { sellUnits, nextOrderNumber, priceEquivalents, LB_PER, formatPrice, DEDUCTION_LABELS } from '../lib/api'
+import { sellUnits, nextOrderNumber, priceEquivalents, LB_PER, formatPrice, DEDUCTION_LABELS, unitLocation } from '../lib/api'
 
 // One-step sale. TJ's ROM flow was: create the buyer (via Janet), create the
 // sales order, go back to each unit and attach it. Here the units are
@@ -117,7 +117,7 @@ export default function SellModal({ units, data, close, onSaved, refresh }) {
               <span className="ticket">W{u.legacy_bwt_id ?? u.id}</span>
               <b>{u.unit_number || '—'}</b>
               <span className="muted">{u.equipment_type?.name || '—'}</span>
-              <span className="muted">{u.physical_location || ''}</span>
+              <span className="muted">{unitLocation(u) || ''}</span>
               <Pill status={u.status?.name} />
               <span className="amt muted">
                 {lbs != null ? `${fmt(lbs)} lb (${basis})` : 'no weight'}

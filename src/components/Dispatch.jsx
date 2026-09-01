@@ -4,7 +4,7 @@ import Pill from './Pill'
 import DispatchForm from './DispatchForm'
 import PrintDoc from './PrintDoc'
 import EmailModal from './EmailModal'
-import { can, assignUnitsToDispatch, markUnitsDelivered, fetchDispatchUnits, fetchUnitsPage } from '../lib/api'
+import { can, assignUnitsToDispatch, markUnitsDelivered, fetchDispatchUnits, fetchUnitsPage, unitLocation } from '../lib/api'
 import { dispatchOrderEmail, releaseEmail, deliveryNoticeEmail } from '../lib/emailTemplates'
 import { useNotes, PopupBanners, NotesList } from './Notes'
 
@@ -261,7 +261,7 @@ function AssignUnitsModal({ dispatch, statuses, close, onSaved }) {
               <b>{u.unit_number || '—'}</b>
               <span className="muted">{u.equipment_type?.name}</span>
               <span className="muted">{u.sold_to?.name}</span>
-              <span className="muted" style={{ marginLeft: 'auto' }}>{u.physical_location}</span>
+              <span className="muted" style={{ marginLeft: 'auto' }}>{unitLocation(u)}</span>
               <Pill status={u.status?.name} />
             </label>
           ))}
