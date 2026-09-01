@@ -27,10 +27,11 @@ const titleCity = (c) => {
 // Stations ROM names by city only. ROM carries no evidence for these (the
 // carriers' dealer records are corporate HQs), so the state is deduced from
 // geography — every entry here is the only city of that name a Hub Group /
-// FedEx Ground yard could be in. Kansas City (MO/KS) is deliberately absent:
-// it is ambiguous, so it stays city-only until TJ confirms.
+// FedEx Ground yard could be in. Kansas City straddles MO/KS; Jason confirmed the
+// J.B. Hunt yard is on the Missouri side.
 const KNOWN_CITY = {
   'dallas': 'Dallas, TX',
+  'kansas city': 'Kansas City, MO',   // J.B. Hunt yard — Missouri side (Jason, 2026-09-01)
   'la': 'Los Angeles, CA',            // Hub Group LA-TI / LA-SB
   'los angeles': 'Los Angeles, CA',
   'st. louis': 'St. Louis, MO',
