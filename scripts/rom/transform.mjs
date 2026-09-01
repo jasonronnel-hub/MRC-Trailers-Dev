@@ -10,6 +10,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
+import { shortLocation } from '../../src/lib/location.js'
 
 try { process.loadEnvFile('.env') } catch { /* env may already be set */ }
 const db = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
@@ -296,6 +297,9 @@ const unitRows = stUnits.map((u) => {
     gross_wt: num(u.gross), tare_wt: num(u.tare), net_wt: num(u.net),
     confirmed_gross: num(u.confirmed_gross), confirmed_tare: num(u.confirmed_tare),
     confirmed_net: num(u.confirmed_net),
+    // Where it sits: "City, ST" (Jason: no carrier prefix). Raw ROM strings
+    // stay on purchase_location / purchase_location_address for the drawer.
+    physical_location: shortLocation(u.purch_contact_name, u.purch_contact_address),
     // ROM grid-parity fields (Field Mapping §3 + Jason's grid screenshots)
     purchase_location: u.purch_contact_name || null,
     purchase_location_address: u.purch_contact_address || null,

@@ -546,10 +546,7 @@ export async function fetchMyRole() {
 
 export const DEDUCTION_LABELS = { none: 'No Deductions', standard: 'Standard', variable: 'Variable' }
 
-// Where the unit is right now. Units created in-app carry physical_location;
-// migrated ROM units carry the purchase contact (the FedEx/Walmart yard it
-// sits at until it ships). Until dispatch those are the same place.
-export const unitLocation = (u) => u.physical_location || u.purchase_location || null
+export { unitLocation, shortLocation } from './location'
 
 export function formatPrice(price, unit) {
   if (price == null) return '—'
