@@ -340,3 +340,14 @@ tbody tr:hover td { background: var(--panel); cursor: pointer; }
   .kv { grid-template-columns: 110px 1fr; }
   .userchip .email { display: none; }
 }
+
+/* Inventory multi-select bar (one-step Sell from the list) */
+.selbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px; margin-bottom: 10px;
+  background: var(--panel); border: 1px solid var(--copper); border-left-width: 4px; border-radius: 8px; font-size: 13px; }
+.selbar .names { color: var(--ink-soft); font-family: var(--mono, ui-monospace, monospace); font-size: 12px; }
+td.sel, th.sel { width: 28px; padding-right: 0; }
+td.sel input { accent-color: var(--copper); width: 15px; height: 15px; }
+.est-list { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 12px; }
+.est-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.est-row:last-child { border-bottom: 0; }
+.est-row .amt { margin-left: auto; font-family: var(--mono, ui-monospace, monospace); }

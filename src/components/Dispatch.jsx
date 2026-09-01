@@ -112,7 +112,7 @@ export default function Dispatch({ data, role, refresh }) {
               <dl className="kv">
                 <dt>Hauler</dt><dd>{drawerD.hauler?.name || '—'}{drawerD.hauler_contact && <span className="muted"> — {drawerD.hauler_contact}</span>}</dd>
                 <dt>Pickup</dt><dd>{drawerD.pickup_location || '—'}{drawerD.pickup_address && <><br /><span className="muted">{drawerD.pickup_address}</span></>}</dd>
-                <dt>Destination</dt><dd>{drawerD.destination?.name || '—'}{(drawerD.destination_address || drawerD.destination?.billing_address) && <><br /><span className="muted">{drawerD.destination_address || drawerD.destination.billing_address}</span></>}</dd>
+                <dt>Destination</dt><dd>{drawerD.destination?.name || '—'}{drawerD.destination?.title_required_with_delivery && <span className="tag" style={{ marginLeft: 6, color: 'var(--error)', borderColor: 'var(--error)' }}>title required</span>}{(drawerD.destination_address || drawerD.destination?.billing_address) && <><br /><span className="muted">{drawerD.destination_address || drawerD.destination.billing_address}</span></>}</dd>
                 <dt>Scheduled pickup</dt><dd className="mono">{drawerD.scheduled_pickup || '—'}</dd>
                 <dt>Delivery ETA</dt><dd className="mono">{drawerD.delivery_eta || '—'}</dd>
                 <dt>Rate</dt><dd>{drawerD.rate != null ? `$${Number(drawerD.rate).toLocaleString()} ${drawerD.rate_basis === 'per_unit' ? 'per unit' : drawerD.rate_basis === 'per_mile' ? 'per mile' : 'flat'}` : '—'}</dd>

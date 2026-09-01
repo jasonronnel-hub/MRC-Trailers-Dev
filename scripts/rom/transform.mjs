@@ -60,11 +60,18 @@ async function upsert(table, rows, onConflict, label) {
 
 // ROM DealerGroupID → party_groups name (Field Mapping §4)
 const GROUP_MAP = { 13: 'Freight', 14: 'HUB', 18: 'Rail Freight', 21: 'Trailer Buyer', 22: 'Trailer Supplier' }
-// ROM ReadyState → unit_statuses name (Field Mapping §6; ids run in reverse pipeline order)
-const STATUS_MAP = {
-  6: 'Purchased Not Ready', 5: 'Ready — Sales Required', 4: 'Sold — Dispatch Required',
-  3: 'Dispatched — Delivery Required', 2: 'Delivered — Invoice Required',
-  1: 'Invoiced — Closed', 7: 'State Unknown',
+// Status derivation. Field Mapping §6 assumed ROM's ReadyState was a 1–7
+// pipeline code; in the real data it is only ever 0/1 — the "Ready, sale
+// required" yes/no flag Jason described. ROM has no single status column;
+// its report headers are computed from separate facts. We compute once at
+// migration, first match wins:
+export function deriveStatus(u) {
+  if (u.invoiced) return 'Invoiced — Closed'
+  if (u.pickup_date || u.completion_date) return 'Delivered — Invoice Required'
+  if (u.dispatch_date) return 'Dispatched — Delivery Required'
+  if (u.sold_to || u.sales_order) return 'Sold — Dispatch Required'
+  if (u.ready) return 'Ready — Sales Required'
+  return 'Purchased Not Ready'
 }
 const TITLE_MAP = { 1: 'Original', 2: 'Bill of Sale' }
 
@@ -254,7 +261,7 @@ const inv = new Map(invIds.map((v) => [v.legacy_invoice_id, v.id]))
 const stUnits = await fetchAllRows('staging_units', '*')
 let soidFallbacks = 0
 const unitRows = stUnits.map((u) => {
-  const readyState = int(u.ready_state)
+  const readyState = int(u.ready_state)   // 0/1 flag, not a pipeline code
   // SaleOrderID=0 means unsold; some completed units carry the sale in BrokerWTDTL.SOID (Field Mapping §9.3)
   let legacySo = int(u.sale_order_id) || null
   if (!legacySo && int(u.dtl_soid)) { legacySo = int(u.dtl_soid); soidFallbacks++ }
@@ -267,7 +274,11 @@ const unitRows = stUnits.map((u) => {
     equipment_type_id: typeName ? equipIdByName(typeName) : null,
     make_id: makeIdForRom(int(u.make_id)),
     model_year: int(u.trailer_year) || null,
-    status_id: statusIdByName(STATUS_MAP[readyState] ?? 'Purchased Not Ready'),
+    status_id: statusIdByName(deriveStatus({
+      invoiced: !!int(u.sale_invoice_id), pickup_date: u.pickup_date, completion_date: u.completion_date,
+      dispatch_date: u.dispatch_date, sold_to: !!int(u.sale_dealer_id), sales_order: !!legacySo,
+      ready: readyState === 1,
+    })),
     source_party_id: party.get(int(u.purch_dealer_id)) ?? null,
     purchase_order_ref: u.purch_cust_ref || null,
     condition_comments: u.ticket_notes || null,

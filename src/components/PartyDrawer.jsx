@@ -71,6 +71,7 @@ export default function PartyDrawer({ party: p, orders, dispatches = [], role, c
                   : <span className="warnrow">NONE on file</span>}
               </dd>
               <dt>REMA member</dt><dd>{p.rema_member ? 'Yes' : 'No'}</dd>
+              <dt>Title w/ delivery</dt><dd>{p.title_required_with_delivery ? <span className="warnrow">Required — title must travel with the unit</span> : 'Not required'}</dd>
             </>)}
           </dl>
 

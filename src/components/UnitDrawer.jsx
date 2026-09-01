@@ -27,7 +27,7 @@ function StatusHistory({ unitId, statuses }) {
   )
 }
 
-export default function UnitDrawer({ unit, statuses, role, close, onEdit, onWeights }) {
+export default function UnitDrawer({ unit, statuses, role, close, onEdit, onWeights, onSell }) {
   const notesState = useNotes('unit', unit?.id)
   if (!unit) return null
   return (
@@ -39,6 +39,7 @@ export default function UnitDrawer({ unit, statuses, role, close, onEdit, onWeig
             <div className="kind">Unit · broker weight ticket</div>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            {onSell && <button className="btn sm" onClick={onSell}>Sell…</button>}
             {onWeights && <button className="btn ghost sm" onClick={onWeights}>Weights…</button>}
             {onEdit && <button className="btn ghost sm" onClick={onEdit}>Edit</button>}
             <button className="x" onClick={close} aria-label="Close" style={{ marginLeft: 0 }}>×</button>

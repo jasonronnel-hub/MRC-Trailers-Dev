@@ -63,6 +63,11 @@ export default function Invoices({ data, role, refresh }) {
         ))}
         <span className="muted" style={{ fontSize: 12.5 }}>{rows.length.toLocaleString()} shown</span>
       </div>
+      {data.invoicesPaidTruncated && (view === 'paid' || view === 'all') && (
+        <div className="banner" style={{ marginBottom: 10 }}>
+          Showing every open and disputed invoice plus the <b>most recent 1,000 paid</b>. Older paid history isn’t loaded yet — server-side search is on the list.
+        </div>
+      )}
 
       {rows.length ? (
         <div className="tablewrap">

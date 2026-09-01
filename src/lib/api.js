@@ -26,45 +26,77 @@ export const UNIT_SELECT = `
   invoice:invoices ( id, invoice_number, open )
 `
 
+// PostgREST caps every response at 1000 rows no matter what .limit() says —
+// with real data (3,161 parties, 20,807 invoices) a plain select silently
+// returns the first thousand and every buyer picker in the app goes blind
+// past the letter K. For the tables the app holds in memory, walk the pages
+// until a short one comes back. No count query, one request in flight per
+// table — the tables run in parallel with each other, not against themselves.
+async function fetchEvery(build) {
+  const data = []
+  for (let from = 0; ; from += 1000) {
+    const r = await build().range(from, from + 999)
+    if (r.error) return r
+    data.push(...r.data)
+    if (r.data.length < 1000) return { data, error: null }
+  }
+}
+
+async function fetchInvoicesWorkingSet(cols) {
+  const base = (o) => supabase.from('invoices').select(cols, o).eq('voided', false).order('id', { ascending: false })
+  const [live, paid] = await Promise.all([
+    fetchEvery((o) => base(o).or('open.eq.true,disputed.eq.true')),
+    base().eq('open', false).eq('disputed', false).range(0, 999),
+  ])
+  if (live.error) return live
+  if (paid.error) return paid
+  const data = [...live.data, ...paid.data].sort((a, b) => b.id - a.id)
+  return { data, error: null, truncated: paid.data.length === 1000 }
+}
+
 export async function fetchAll() {
   const [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches, invoices, paymentTerms] = await Promise.all([
     supabase.from('unit_statuses').select('id, name, sort_order').order('sort_order'),
-    supabase.from('parties').select(`
+    fetchEvery((o) => supabase.from('parties').select(`
       id, name, billing_address, city, state, zip,
       payment_method, credit_limit,
       deduction_model, standard_deductions, destruction_agreement_signed,
       rema_member, merged_parent, general_notes, trucking_notes,
-      purchase_hot_notes, report_recipients, active,
+      purchase_hot_notes, report_recipients, active, title_required_with_delivery,
       group:party_groups ( id, name ),
       contacts:party_contacts ( id, name, email, phone, is_default, active ),
       deductions:party_deductions ( id, description, kind, basis, rate ),
       payment_terms:payment_terms ( id, name )
-    `).eq('active', true).order('name').limit(10000),
-    supabase.from('sales_orders').select(`
+    `, o).eq('active', true).order('name')),
+    fetchEvery((o) => supabase.from('sales_orders').select(`
       id, order_number, customer_reference, item_code, price, price_unit,
       ref_weight_lbs, header_notes, detail_notes, open, closed_at, created_at,
       buyer:parties ( id, name, destruction_agreement_signed ),
       units ( count )
-    `).order('id', { ascending: false }).limit(10000),
+    `, o).order('id', { ascending: false })),
     supabase.from('party_groups').select('id, name').order('name'),
     supabase.from('equipment_types').select('id, name, item_code, default_ref_weight_lbs').eq('active', true).order('name'),
     supabase.from('title_types').select('id, name'),
-    supabase.from('dispatches').select(`
+    fetchEvery((o) => supabase.from('dispatches').select(`
       id, dispatch_number, hauler_contact, pickup_location, pickup_address,
       destination_address, scheduled_pickup, delivery_eta, rate, rate_basis,
       notes, cancelled, created_at,
       hauler:parties!dispatches_hauler_party_id_fkey ( id, name, phone, email ),
-      destination:parties!dispatches_destination_party_id_fkey ( id, name, billing_address ),
+      destination:parties!dispatches_destination_party_id_fkey ( id, name, billing_address, title_required_with_delivery ),
       units ( count )
-    `).order('id', { ascending: false }).limit(10000),
-    supabase.from('invoices').select(`
+    `, o).order('id', { ascending: false })),
+    // Invoices: every OPEN or DISPUTED one (Katherine's working set — ~900 of
+    // 20,807 on the June backup) plus the most recent 1,000 paid. Loading all
+    // 20k into the browser blew the DB statement timeout; older paid history
+    // waits for server-side search (backlog #1).
+    fetchInvoicesWorkingSet(`
       id, legacy_invoice_id, invoice_number, invoice_date, due_date, terms,
       amount, open, paid_date, paid_amount, payment_method, payment_ref,
       notes, voided, created_at,
       disputed, dispute_reason, dispute_amount, disputed_at, dispute_resolved_at,
       buyer:parties ( id, name ),
       units ( count )
-    `).eq('voided', false).order('id', { ascending: false }).limit(10000),
+    `),
     supabase.from('payment_terms').select('id, name, active').order('sort_order'),
   ])
   for (const r of [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches, invoices, paymentTerms]) if (r.error) throw r.error
@@ -72,6 +104,7 @@ export async function fetchAll() {
     statuses: statuses.data, parties: parties.data, orders: orders.data,
     groups: groups.data, equipTypes: equipTypes.data, titleTypes: titleTypes.data,
     dispatches: dispatches.data, invoices: invoices.data, paymentTerms: paymentTerms.data,
+    invoicesPaidTruncated: !!invoices.truncated,
   }
 }
 
@@ -157,10 +190,11 @@ export async function fetchActiveUnits(statuses) {
 
 export async function saveParty(fields, id) {
   const q = id
-    ? supabase.from('parties').update(fields).eq('id', id)
-    : supabase.from('parties').insert(fields)
-  const { error } = await q
+    ? supabase.from('parties').update(fields).eq('id', id).select('id').single()
+    : supabase.from('parties').insert(fields).select('id').single()
+  const { data, error } = await q
   if (error) throw error
+  return data?.id ?? id
 }
 
 export async function saveDeduction(fields, id) {
@@ -270,6 +304,31 @@ export async function attachUnits(orderId, unitIds) {
     .update({ sales_order_id: orderId })
     .in('id', unitIds)
   if (error) throw error
+}
+
+// One-step sale (TJ's real flow): create the sales order — or reuse an open
+// one for the same buyer — and attach an EXPLICIT list of units in the same
+// action. The attach trigger fills sold_to, flips status to Sold — Dispatch
+// Required, and writes status_log, exactly as the two-screen path does.
+export async function sellUnits({ order, orderId, unitIds }) {
+  let id = orderId
+  let order_number = null
+  if (!id) {
+    const { data, error } = await supabase.from('sales_orders').insert(order).select('id, order_number').single()
+    if (error) throw error
+    id = data.id; order_number = data.order_number
+  }
+  await attachUnits(id, unitIds)
+  return { id, order_number }
+}
+
+// The same price in every unit the trade quotes in, so a $/GT quote can be
+// compared with a $/NT one without a calculator. Weights stay in pounds;
+// this only converts the price.
+export function priceEquivalents(price, unit) {
+  if (price == null || price === '' || unit === 'flat') return null
+  const perLb = LB_PER[unit] ? Number(price) / LB_PER[unit] : Number(price)
+  return { per_lb: perLb, per_nt: perLb * LB_PER.per_nt, per_gt: perLb * LB_PER.per_gt, per_mt: perLb * LB_PER.per_mt }
 }
 
 // ---- fleet snapshots (supplier fleet summaries — Selena's Friday report) ----

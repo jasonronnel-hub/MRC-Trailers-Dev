@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Modal from './Modal'
 import SearchSelect from './SearchSelect'
 import { saveOrder, nextOrderNumber } from '../lib/api'
+import { PriceEquivalents } from './SellModal'
 
 // Customer reference must follow the 'AUG 26' convention (Spec §2.4: enforce
 // format in UI). Blank is allowed; anything else must be MMM YY.
@@ -101,6 +102,7 @@ export default function OrderForm({ order, orders, parties, equipTypes, close, o
               <option value="per_mt">per metric tonne (2,204.6 lb)</option>
               <option value="flat">flat</option>
             </select>
+            <PriceEquivalents price={f.price} unit={f.price_unit} />
           </div>
           <div className="field">
             <label>Reference weight (lb)</label>

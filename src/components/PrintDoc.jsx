@@ -38,7 +38,7 @@ export default function PrintDoc({ kind, dispatch: d, units, close }) {
             </>) : (<>
               <dt>Carrier</dt><dd><b>{fmt(d.hauler?.name)}</b>{d.hauler_contact ? ` — ${d.hauler_contact}` : ''}</dd>
               <dt>Pickup</dt><dd>{fmt(d.pickup_location)}{d.pickup_address ? ` — ${d.pickup_address}` : ''}</dd>
-              <dt>Deliver to</dt><dd><b>{fmt(d.destination?.name)}</b>{d.destination_address ? ` — ${d.destination_address}` : d.destination?.billing_address ? ` — ${d.destination.billing_address}` : ''}</dd>
+              <dt>Deliver to</dt><dd><b>{fmt(d.destination?.name)}</b>{d.destination?.title_required_with_delivery && <b> — TITLE MUST ACCOMPANY DELIVERY</b>}{d.destination_address ? ` — ${d.destination_address}` : d.destination?.billing_address ? ` — ${d.destination.billing_address}` : ''}</dd>
               <dt>Scheduled pickup</dt><dd>{fmt(d.scheduled_pickup)}</dd>
               <dt>Delivery ETA</dt><dd>{fmt(d.delivery_eta)}</dd>
               {d.rate != null && (<>

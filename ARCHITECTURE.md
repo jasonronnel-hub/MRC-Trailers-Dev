@@ -50,8 +50,11 @@ left column, stop and think; the right column is expected to churn.
   `isOpen` is NOT the AR flag — `PaymentRecDate`/paid amounts are; confirm
   with Katherine). Detail-level settlement (Our/Their/Settle weights,
   deductions, partial application) stays Phase 3b with Katherine.
-  Known scale wart: the Invoices tab reads fetchAll's newest-10k window —
-  server-page it like units before cutover.
+  Scale (Sept 2026): fetchAll loads only the invoice WORKING SET — every
+  open or disputed invoice plus the newest 1,000 paid (`fetchInvoicesWorkingSet`).
+  Loading all 20,807 into the browser blew Postgres's statement timeout.
+  Older paid history needs server-side search like units before cutover;
+  the Invoices tab says so on its Paid/All views.
 - **`notes` order/dispatch mapping** — legacy notes migrate to units and
   parties today; order-attached notes stay in staging until entity mapping is
   confirmed against real data.
@@ -60,6 +63,19 @@ left column, stop and think; the right column is expected to churn.
   whether units need their own ref field.
 
 ## Migration pipeline (rehearsable end to end)
+
+**Field Mapping §6 is wrong about status.** ROM's `ReadyState` is a 0/1
+flag (the "ready, sale required" checkbox TJ watches), not a 1–7 pipeline
+code. Status is DERIVED at migration in `deriveStatus()` (transform.mjs),
+first match wins: invoice → Closed; pickup/completion date → Delivered;
+dispatch date → Dispatched; buyer or SO → Sold; ready flag → Ready; else
+Not Ready. `scripts/rom/restatus.mjs` re-applies the rule to already-loaded
+units without replaying the transform.
+
+**PostgREST caps responses at 1,000 rows** regardless of `.limit()`.
+`fetchEvery()` in api.js walks pages for the tables held in memory
+(parties, orders, dispatches); anything larger must be server-paged like
+units. Don't fan out dozens of parallel pages — the DB cancels on timeout.
 
 ```
 npm run rom:extract    # Docker SQL Server → exports/*.psv   (real data!)

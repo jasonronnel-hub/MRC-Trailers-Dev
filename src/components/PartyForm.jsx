@@ -41,6 +41,7 @@ export default function PartyForm({ party, groups, paymentTerms, close, onSaved 
     destruction_agreement_signed: F(party?.destruction_agreement_signed),
     rema_member: party?.rema_member ?? false,
     merged_parent: party?.merged_parent ?? false,
+    title_required_with_delivery: party?.title_required_with_delivery ?? false,
     general_notes: F(party?.general_notes),
     trucking_notes: F(party?.trucking_notes),
     purchase_hot_notes: F(party?.purchase_hot_notes),
@@ -54,7 +55,7 @@ export default function PartyForm({ party, groups, paymentTerms, close, onSaved 
     e.preventDefault()
     setBusy(true); setErr('')
     try {
-      await saveParty({
+      const savedId = await saveParty({
         ...f,
         group_id: f.group_id || null,
         payment_terms_id: f.payment_terms_id || null,
@@ -74,7 +75,7 @@ export default function PartyForm({ party, groups, paymentTerms, close, onSaved 
           await saveDeduction(id ? { ...fields, rate: Number(fields.rate) } : { ...fields, rate: Number(fields.rate), party_id: party.id }, id)
         }
       }
-      onSaved()
+      onSaved(savedId ?? party?.id)
     } catch (ex) {
       setErr(ex.message); setBusy(false)
     }
@@ -131,6 +132,7 @@ export default function PartyForm({ party, groups, paymentTerms, close, onSaved 
           <div className="field" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
             <label className="checkline"><input type="checkbox" checked={f.rema_member} onChange={set('rema_member')} /> REMA member</label>
             <label className="checkline"><input type="checkbox" checked={f.merged_parent} onChange={set('merged_parent')} /> Merged parent (central billing)</label>
+            <label className="checkline"><input type="checkbox" checked={f.title_required_with_delivery} onChange={set('title_required_with_delivery')} /> Requires title with delivery</label>
           </div>
           <div className="field full">
             <label>General notes</label>
