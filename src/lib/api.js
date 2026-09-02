@@ -16,13 +16,16 @@ export const UNIT_SELECT = `
   purchase_location, purchase_location_address, sale_location, sale_cust_ref,
   deliver_wt_ref, purch_ticket_ref, sales_ticket_ref, wt_um, material_type,
   gross_wt, tare_wt, net_wt, confirmed_net, tire_count,
+  purchase_date, ready_date, sold_date, dispatch_date, completion_date, commodity_code, import_batch,
+  purchase_order_ref, purchase_rate, purchase_rate_unit,
+  make:trailer_makes ( name ),
   status:unit_statuses ( id, name, sort_order ),
   equipment_type:equipment_types ( name, item_code ),
   title_type:title_types ( name ),
   source:parties!units_source_party_id_fkey ( id, name ),
   sold_to:parties!units_sold_to_party_id_fkey ( id, name ),
   sales_order:sales_orders ( id, order_number, customer_reference, price, price_unit ),
-  dispatch:dispatches ( id, dispatch_number ),
+  dispatch:dispatches ( id, dispatch_number, scheduled_pickup, delivery_eta ),
   invoice:invoices ( id, invoice_number, open )
 `
 
@@ -55,7 +58,7 @@ async function fetchInvoicesWorkingSet(cols) {
 }
 
 export async function fetchAll() {
-  const [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches, invoices, paymentTerms] = await Promise.all([
+  const [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches, invoices, paymentTerms, commodityCodes] = await Promise.all([
     supabase.from('unit_statuses').select('id, name, sort_order').order('sort_order'),
     fetchEvery((o) => supabase.from('parties').select(`
       id, name, billing_address, city, state, zip,
@@ -71,7 +74,11 @@ export async function fetchAll() {
     fetchEvery((o) => supabase.from('sales_orders').select(`
       id, order_number, customer_reference, item_code, price, price_unit,
       ref_weight_lbs, header_notes, detail_notes, open, closed_at, created_at,
-      buyer:parties ( id, name, destruction_agreement_signed ),
+      title_required_with_delivery, title_notes,
+      payment_terms:payment_terms ( id, name ),
+      commodity:commodity_codes ( code, name ),
+      deductions:order_deductions ( id, description, kind, basis, rate ),
+      buyer:parties ( id, name, destruction_agreement_signed, title_required_with_delivery ),
       units ( count )
     `, o).order('id', { ascending: false })),
     supabase.from('party_groups').select('id, name').order('name'),
@@ -94,17 +101,20 @@ export async function fetchAll() {
       amount, open, paid_date, paid_amount, payment_method, payment_ref,
       notes, voided, created_at,
       disputed, dispute_reason, dispute_amount, disputed_at, dispute_resolved_at,
+      lost, lost_at, lost_reason,
       buyer:parties ( id, name ),
       units ( count )
     `),
     supabase.from('payment_terms').select('id, name, active').order('sort_order'),
+    supabase.from('commodity_codes').select('code, name, active').order('code'),
   ])
-  for (const r of [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches, invoices, paymentTerms]) if (r.error) throw r.error
+  for (const r of [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches, invoices, paymentTerms, commodityCodes]) if (r.error) throw r.error
   return {
     statuses: statuses.data, parties: parties.data, orders: orders.data,
     groups: groups.data, equipTypes: equipTypes.data, titleTypes: titleTypes.data,
     dispatches: dispatches.data, invoices: invoices.data, paymentTerms: paymentTerms.data,
     invoicesPaidTruncated: !!invoices.truncated,
+    commodityCodes: commodityCodes.data,
   }
 }
 
@@ -139,13 +149,22 @@ export async function fetchUnitsPage({ filters = {}, sort = {}, page = 0, pageSi
   if (filters.unattachedDispatch) q = q.is('dispatch_id', null)
   if (filters.unattachedInvoice) q = q.is('invoice_id', null)
   if (filters.pickedUpSince) q = q.gte('pickup_date', filters.pickedUpSince)
+  // Needs Attention conditions (thresholds live in src/lib/attention.js)
+  if (filters.purchasedBefore) q = q.lte('purchase_date', filters.purchasedBefore)
+  if (filters.readyBefore) q = q.lte('ready_date', filters.readyBefore)
+  if (filters.importedOnly) q = q.not('import_batch', 'is', null)
+  if (filters.importBatch) q = q.eq('import_batch', filters.importBatch)
   if (filters.q?.trim()) {
     const needle = filters.q.trim().replaceAll(',', ' ').replaceAll('%', '')
     q = q.or(['unit_number', 'alt_unit_number', 'vin', 'physical_location', 'purchase_location']
       .map((c) => `${c}.ilike.%${needle}%`).join(','))
   }
 
-  const SORT_COLS = { id: 'id', unit_number: 'unit_number', physical_location: 'physical_location', status: 'status_id', model_year: 'model_year' }
+  const SORT_COLS = {
+    id: 'id', unit_number: 'unit_number', physical_location: 'physical_location', status: 'status_id', model_year: 'model_year',
+    vin: 'vin', purchase_date: 'purchase_date', ready_date: 'ready_date', sold_date: 'sold_date',
+    dispatch_date: 'dispatch_date', completion_date: 'completion_date', commodity_code: 'commodity_code',
+  }
   const col = SORT_COLS[sort.col]
   if (col) q = q.order(col, { ascending: sort.dir !== 'desc', nullsFirst: false })
   else q = q.order('status_id').order('id')
@@ -220,10 +239,11 @@ export async function saveContact(fields, id) {
 
 export async function saveOrder(fields, id) {
   const q = id
-    ? supabase.from('sales_orders').update(fields).eq('id', id)
-    : supabase.from('sales_orders').insert(fields)
-  const { error } = await q
+    ? supabase.from('sales_orders').update(fields).eq('id', id).select('id').single()
+    : supabase.from('sales_orders').insert(fields).select('id').single()
+  const { data, error } = await q
   if (error) throw error
+  return data?.id ?? id
 }
 
 export const nextOrderNumber = (orders) => {
@@ -310,16 +330,29 @@ export async function attachUnits(orderId, unitIds) {
 // one for the same buyer — and attach an EXPLICIT list of units in the same
 // action. The attach trigger fills sold_to, flips status to Sold — Dispatch
 // Required, and writes status_log, exactly as the two-screen path does.
-export async function sellUnits({ order, orderId, unitIds }) {
+export async function sellUnits({ order, orderId, unitIds, deductions = [] }) {
   let id = orderId
   let order_number = null
   if (!id) {
     const { data, error } = await supabase.from('sales_orders').insert(order).select('id, order_number').single()
     if (error) throw error
     id = data.id; order_number = data.order_number
+    if (deductions.length) await replaceOrderDeductions(id, deductions)
   }
   await attachUnits(id, unitIds)
   return { id, order_number }
+}
+
+// The order's deduction schedule, replaced wholesale (small lists; simpler
+// than diffing). Rows: { description, kind, basis, rate }.
+export async function replaceOrderDeductions(orderId, rows) {
+  const { error: de } = await supabase.from('order_deductions').delete().eq('order_id', orderId)
+  if (de) throw de
+  const clean = rows.filter((r) => r.description?.trim() && r.rate !== '' && r.rate != null)
+    .map((r) => ({ order_id: orderId, description: r.description.trim(), kind: r.kind, basis: r.basis, rate: Number(r.rate) }))
+  if (!clean.length) return
+  const { error } = await supabase.from('order_deductions').insert(clean)
+  if (error) throw error
 }
 
 // The same price in every unit the trade quotes in, so a $/GT quote can be
@@ -466,13 +499,14 @@ export function suggestedUnitAmount(u, deductions = []) {
   wt = Math.max(0, wt)
   const perLb = LB_PER[unit]
   const gross = perLb ? (Number(price) * wt) / perLb : Number(price) * wt
-  return applyDollarDeductions(gross, u, deductions)
+  return applyDollarDeductions(gross, u, deductions, wt)
 }
 
-function applyDollarDeductions(amount, u, deductions) {
+function applyDollarDeductions(amount, u, deductions, billableLbs = null) {
   for (const d of deductions) {
     if (d.kind !== 'dollars') continue
     if (d.basis === 'per_unit') amount -= Number(d.rate)
+    else if (d.basis === 'per_lb') { if (billableLbs != null) amount -= Number(d.rate) * billableLbs }
     else if (u.tire_count != null) amount -= Number(d.rate) * u.tire_count
   }
   return Math.max(0, amount)
@@ -535,6 +569,8 @@ const CAN = {
   createInvoice: ['accounting', 'admin'],
   editInvoice: ['accounting', 'admin'],
   importSnapshot: ['office', 'sales', 'admin'],
+  markInvoiceLost: ['accounting', 'admin'],
+  editOrderDeductions: ['sales', 'accounting', 'admin'],
 }
 export const can = (role, action) => (CAN[action] || []).includes(role)
 
@@ -542,6 +578,26 @@ export async function fetchMyRole() {
   const { data, error } = await supabase.from('user_roles').select('role').maybeSingle()
   if (error) throw error
   return data?.role ?? null
+}
+
+// Lost is an accounting decision, never automatic (Jason). The invoice stays
+// open=true so history is intact; `lost` just takes it out of the AR chase.
+export async function markInvoiceLost(id, reason) {
+  const { error } = await supabase.from('invoices')
+    .update({ lost: true, lost_at: new Date().toISOString(), lost_reason: reason || null }).eq('id', id)
+  if (error) throw error
+}
+export async function unmarkInvoiceLost(id) {
+  const { error } = await supabase.from('invoices').update({ lost: false, lost_at: null, lost_reason: null }).eq('id', id)
+  if (error) throw error
+}
+
+// Sum of invoice amounts dated in [from, to]. Small result set; summed here.
+export async function fetchInvoicedTotal(from, to) {
+  const { data, error } = await supabase.from('invoices').select('amount')
+    .eq('voided', false).gte('invoice_date', from).lte('invoice_date', to).limit(5000)
+  if (error) throw error
+  return { total: data.reduce((s, i) => s + Number(i.amount || 0), 0), count: data.length }
 }
 
 export const DEDUCTION_LABELS = { none: 'No Deductions', standard: 'Standard', variable: 'Variable' }

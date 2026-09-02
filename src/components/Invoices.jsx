@@ -4,8 +4,9 @@ import Pill from './Pill'
 import {
   can, saveInvoice, nextInvoiceNumber, fetchInvoiceUnits,
   assignUnitsToInvoice, markInvoicePaid, fetchUnitsPage, suggestedUnitAmount,
-  flagInvoiceDispute, resolveInvoiceDispute,
+  flagInvoiceDispute, resolveInvoiceDispute, markInvoiceLost, unmarkInvoiceLost,
 } from '../lib/api'
+import { isOverdue, daysPastDue, dueDate, AR_RULES } from '../lib/ar'
 import { useNotes, PopupBanners, NotesList } from './Notes'
 import SearchSelect from './SearchSelect'
 import WeightsModal from './WeightsModal'
@@ -23,6 +24,7 @@ export default function Invoices({ data, role, refresh }) {
   const [attachInv, setAttachInv] = useState(null)
   const [payInv, setPayInv] = useState(null)
   const [disputeInv, setDisputeInv] = useState(null)
+  const [lostInv, setLostInv] = useState(null)
 
   const writable = can(role, 'editInvoice')
   // Standard-model buyers get their schedule auto-applied to suggestions;
@@ -31,11 +33,19 @@ export default function Invoices({ data, role, refresh }) {
     const buyer = parties.find((p) => p.id === inv.buyer?.id)
     return buyer?.deduction_model === 'standard' ? (buyer.deductions || []) : []
   }
-  const saved = () => { setFormInv(null); setAttachInv(null); setPayInv(null); setDisputeInv(null); setDrawerInv(null); refresh() }
+  const saved = () => { setFormInv(null); setAttachInv(null); setPayInv(null); setDisputeInv(null); setLostInv(null); setDrawerInv(null); refresh() }
   const disputedCount = invoices.filter((i) => i.disputed).length
+  // Overdue = open, not disputed, not lost, past due date (+ grace). Due
+  // date comes from the invoice, else invoice date + terms (invoice's own
+  // terms text, else the buyer's). Rules in lib/ar.js — provisional.
+  const termsOf = (inv) => parties.find((p) => p.id === inv.buyer?.id)?.payment_terms?.name
+  const overdueCount = invoices.filter((i) => isOverdue(i, termsOf(i))).length
+  const lostCount = invoices.filter((i) => i.lost).length
 
   let rows = invoices
-  if (view === 'open') rows = rows.filter((i) => i.open)
+  if (view === 'open') rows = rows.filter((i) => i.open && !i.lost)
+  if (view === 'overdue') rows = rows.filter((i) => isOverdue(i, termsOf(i))).sort((a, b) => (daysPastDue(b, termsOf(b)) ?? 0) - (daysPastDue(a, termsOf(a)) ?? 0))
+  if (view === 'lost') rows = rows.filter((i) => i.lost)
   if (view === 'disputed') rows = rows.filter((i) => i.disputed)
   if (view === 'paid') rows = rows.filter((i) => !i.open)
   if (q.trim()) {
@@ -58,7 +68,7 @@ export default function Invoices({ data, role, refresh }) {
       <div className="filters">
         <input className="search" placeholder="Search invoice #, buyer, payment ref…"
           value={q} onChange={(e) => setQ(e.target.value)} />
-        {[['open', 'Open'], ['disputed', `Disputed${disputedCount ? ` (${disputedCount})` : ''}`], ['paid', 'Paid'], ['all', 'All']].map(([k, label]) => (
+        {[['open', 'Open'], ['overdue', `Overdue${overdueCount ? ` (${overdueCount})` : ''}`], ['disputed', `Disputed${disputedCount ? ` (${disputedCount})` : ''}`], ['paid', 'Paid'], ['lost', `Lost${lostCount ? ` (${lostCount})` : ''}`], ['all', 'All']].map(([k, label]) => (
           <span key={k} className={'chip' + (view === k ? ' on' : '')} onClick={() => setView(k)}>{label}</span>
         ))}
         <span className="muted" style={{ fontSize: 12.5 }}>{rows.length.toLocaleString()} shown</span>
@@ -87,14 +97,19 @@ export default function Invoices({ data, role, refresh }) {
                   <td>{money(i.amount)}</td>
                   <td>{i.units?.[0]?.count ?? 0}</td>
                   <td>
-                    {i.disputed
+                    {i.lost
+                      ? <span className="pill"><span className="dot" />Lost</span>
+                      : i.disputed
                       ? <span className="pill error"><span className="dot" />Disputed</span>
                       : i.open
                         ? <span className="pill copper"><span className="dot" />Open</span>
                         : <span className="pill"><span className="dot" />Paid</span>}
                   </td>
                   <td className="muted" style={{ fontSize: 12.5 }}>
-                    {i.open ? (i.due_date ? `due ${i.due_date}` : '—')
+                    {i.open ? (() => {
+                        const due = dueDate(i, termsOf(i)); const late = daysPastDue(i, termsOf(i))
+                        return due ? <>due {due}{!i.lost && late > AR_RULES.overdueGraceDays && <span style={{ color: 'var(--error)', marginLeft: 6 }}>{late}d late</span>}</> : '—'
+                      })()
                       : `${money(i.paid_amount ?? i.amount)}${i.paid_date ? ` on ${i.paid_date}` : ''}${i.payment_method ? ` · ${i.payment_method}` : ''}`}
                   </td>
                 </tr>
@@ -114,6 +129,9 @@ export default function Invoices({ data, role, refresh }) {
           onAttach={() => setAttachInv(drawerInv)}
           onPay={() => setPayInv(drawerInv)}
           onDispute={() => setDisputeInv(drawerInv)}
+          onLost={can(role, 'markInvoiceLost') ? () => setLostInv(drawerInv) : null}
+          onUnlost={can(role, 'markInvoiceLost') ? async () => { await unmarkInvoiceLost(drawerInv.id); saved() } : null}
+          buyerTerms={termsOf(drawerInv)}
           onResolve={async () => { await resolveInvoiceDispute(drawerInv.id); saved() }} />
       )}
       {formInv && (
@@ -127,11 +145,13 @@ export default function Invoices({ data, role, refresh }) {
       )}
       {payInv && <MarkPaidModal invoice={payInv} close={() => setPayInv(null)} onSaved={saved} />}
       {disputeInv && <DisputeModal invoice={disputeInv} close={() => setDisputeInv(null)} onSaved={saved} />}
+      {lostInv && <LostModal invoice={lostInv} close={() => setLostInv(null)} onSaved={saved} />}
     </div>
   )
 }
 
-function InvoiceDrawer({ invoice: i, writable, role, deductions = [], close, onEdit, onAttach, onPay, onDispute, onResolve }) {
+function InvoiceDrawer({ invoice: i, writable, role, deductions = [], buyerTerms, close, onEdit, onAttach, onPay, onDispute, onResolve, onLost, onUnlost }) {
+  const late = i.open && !i.lost ? daysPastDue(i, buyerTerms) : null
   const [units, setUnits] = useState(null)
   const [weightsUnit, setWeightsUnit] = useState(null)
   const notesState = useNotes('invoice', i.id)
@@ -162,13 +182,15 @@ function InvoiceDrawer({ invoice: i, writable, role, deductions = [], close, onE
         <div className="dhead">
           <div>
             <h3 className="mono">{i.invoice_number}</h3>
-            <div className="kind">Invoice · {i.disputed ? 'DISPUTED' : i.open ? 'OPEN — money not received' : 'paid'}</div>
+            <div className="kind">Invoice · {i.lost ? 'LOST — written off, kept for history' : i.disputed ? 'DISPUTED' : i.open ? 'OPEN — money not received' : 'paid'}</div>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             {writable && i.open && <button className="btn sm" onClick={onPay}>Mark paid</button>}
             {writable && !i.disputed && i.open && <button className="btn ghost sm" onClick={onDispute}>Flag dispute…</button>}
             {writable && i.disputed && <button className="btn ghost sm" onClick={onResolve}>Resolve dispute</button>}
             {writable && i.open && <button className="btn ghost sm" onClick={onAttach}>Attach units</button>}
+            {onLost && i.open && !i.lost && <button className="btn ghost sm" onClick={onLost}>Mark lost…</button>}
+            {onUnlost && i.lost && <button className="btn ghost sm" onClick={onUnlost}>Undo lost</button>}
             {writable && <button className="btn ghost sm" onClick={onEdit}>Edit</button>}
             <button className="x" onClick={close} aria-label="Close" style={{ marginLeft: 0 }}>×</button>
           </div>
@@ -182,11 +204,21 @@ function InvoiceDrawer({ invoice: i, writable, role, deductions = [], close, onE
               <div style={{ fontSize: 12, marginTop: 4 }}>TJ works the collection; log progress in the notes below.</div>
             </div>
           )}
+          {i.lost && (
+            <div className="banner">
+              <b>Written off as lost{i.lost_at ? ` on ${i.lost_at.slice(0, 10)}` : ''}.</b> {i.lost_reason || 'No reason recorded.'} The record stays for history; it is out of the AR chase.
+            </div>
+          )}
+          {late > AR_RULES.overdueGraceDays && !i.disputed && (
+            <div className="banner" style={{ background: 'var(--error-tint)', borderColor: 'rgba(179,64,47,0.35)', borderLeftColor: 'var(--error)' }}>
+              <b>{late} days past due</b> (due {dueDate(i, buyerTerms)}).
+            </div>
+          )}
           <PopupBanners popups={notesState.popups} />
           <dl className="kv">
             <dt>Buyer</dt><dd>{i.buyer?.name || '—'}</dd>
             <dt>Invoice date</dt><dd className="mono">{i.invoice_date || '—'}</dd>
-            <dt>Due</dt><dd className="mono">{i.due_date || '—'}</dd>
+            <dt>Due</dt><dd className="mono">{i.due_date || (dueDate(i, buyerTerms) ? <>{dueDate(i, buyerTerms)} <span className="muted">(from terms)</span></> : '—')}</dd>
             <dt>Terms</dt><dd>{i.terms || '—'}</dd>
             <dt>Amount</dt>
             <dd>
@@ -240,6 +272,29 @@ function InvoiceDrawer({ invoice: i, writable, role, deductions = [], close, onE
           onSaved={() => { setWeightsUnit(null); loadUnits() }} />
       )}
     </div>
+  )
+}
+
+// Lost is a deliberate accounting decision (never automatic). The invoice
+// stays open in the record so history is intact; it leaves the AR chase.
+function LostModal({ invoice, close, onSaved }) {
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const go = async () => {
+    setBusy(true); setErr('')
+    try { await markInvoiceLost(invoice.id, reason); onSaved() } catch (e) { setErr(e.message); setBusy(false) }
+  }
+  return (
+    <Modal title={`Write off ${invoice.invoice_number} as lost`} close={close}>
+      {err && <div className="auth-err">{err}</div>}
+      <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>{invoice.buyer?.name} · {money(invoice.amount)}. This keeps the record and takes it out of the overdue queue. It can be undone.</p>
+      <div className="field"><label>Reason</label><textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. buyer out of business, collections exhausted" /></div>
+      <div className="form-actions">
+        <button type="button" className="btn ghost" onClick={close}>Cancel</button>
+        <button className="btn" disabled={busy} onClick={go}>{busy ? 'Saving…' : 'Mark lost'}</button>
+      </div>
+    </Modal>
   )
 }
 

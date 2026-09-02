@@ -77,13 +77,16 @@ export function deriveStatus(u) {
 const TITLE_MAP = { 1: 'Original', 2: 'Bill of Sale' }
 
 // ---------- lookups from the live DB ----------
-const [{ data: groups }, { data: statuses }, { data: titles }, { data: equipTypes }, { data: paymentTerms }] = await Promise.all([
+const [{ data: groups }, { data: statuses }, { data: titles }, { data: equipTypes }, { data: paymentTerms }, { data: commodities }] = await Promise.all([
   db.from('party_groups').select('id, name'),
   db.from('unit_statuses').select('id, name'),
   db.from('title_types').select('id, name'),
   db.from('equipment_types').select('id, name'),
   db.from('payment_terms').select('id, name'),
+  db.from('commodity_codes').select('code, rom_inventory_id'),
 ])
+// ROM EntInventory id → commodity code ("7054-53SR"); same set as ROM's picklist.
+const codeByRomInv = new Map(commodities.map((c) => [c.rom_inventory_id, c.code]))
 const groupId = (n) => groups.find((g) => g.name === n)?.id ?? null
 const statusIdByName = (n) => statuses.find((s) => s.name === n)?.id
 const titleId = (n) => titles.find((t) => t.name === n)?.id ?? null
@@ -206,10 +209,15 @@ const orderRows = stOrders.map((o) => ({
   order_number: `R-${o.order_id}`,          // legacy orders keep a distinct series; never collides with SO- numbers
   buyer_party_id: party.get(int(o.customer_id)),
   customer_reference: o.external_order_num || null,
-  item_code: o.item_text || null,
+  // item_code is now a reference to commodity_codes (ROM's own set); the line's
+  // InventoryID resolves it. ROM's free-text item (scrap-side orders mostly)
+  // is kept in detail_notes so nothing is lost.
+  item_code: codeByRomInv.get(int(o.inventory_id)) ?? null,
+  payment_terms_id: termsIdFor(o.terms),
   price: num(o.price), price_unit: priceUnit(o.wtum),
   ref_weight_lbs: int(o.units_ordered),      // Field Mapping §9.2: UnitsOrdered = per-unit reference weight
   header_notes: o.order_notes || null,
+  detail_notes: o.item_text && !codeByRomInv.get(int(o.inventory_id)) ? `ROM item: ${o.item_text}` : null,
   open: !o.closed_date && o.void !== '1',
   closed_at: o.closed_date || null,
 })).filter((o) => o.legacy_order_id != null && o.buyer_party_id != null)
@@ -218,6 +226,8 @@ const skippedOrders = stOrders.length - orderRows.length
 
 const soIds = await fetchAllRows('sales_orders', 'id, legacy_order_id', (q) => q.not('legacy_order_id', 'is', null))
 const so = new Map(soIds.map((o) => [o.legacy_order_id, o.id]))
+// Sale date for migrated units = the sales order's date (ROM has no per-unit sold date).
+const soDate = new Map(stOrders.map((o) => [int(o.order_id), dateOnly(o.order_date)]))
 
 // ---------- 5b. invoices (headers; invoiced ≠ paid comes from isOpen/PaymentRecDate) ----------
 const stInvoicesRaw = await fetchAllRows('staging_invoices', '*')
@@ -243,7 +253,9 @@ const invoiceRows = stInvoices.map((v) => {
     buyer_party_id: party.get(int(v.customer_id)) ?? null,
     invoice_date: dateOnly(v.invoice_date), due_date: dateOnly(v.due_date),
     terms: v.terms || null,
-    amount: paidSum > 0 ? paidSum : null,
+    // Invoice total is ROM's TransactionTotal; before it was extracted the
+    // paid sum stood in, which left every OPEN invoice blank.
+    amount: num(v.transaction_total) ?? (paidSum > 0 ? paidSum : null),
     open: !paid && v.void !== '1',
     paid_date: dateOnly(v.payment_rec_date),
     paid_amount: paid && paidSum > 0 ? paidSum : null,
@@ -275,6 +287,9 @@ const unitRows = stUnits.map((u) => {
     equipment_type_id: typeName ? equipIdByName(typeName) : null,
     make_id: makeIdForRom(int(u.make_id)),
     model_year: int(u.trailer_year) || null,
+    purchase_date: dateOnly(u.created_date),                 // BrokerWTHDR.CreatedDate — when the ticket was entered
+    sold_date: legacySo ? (soDate.get(legacySo) ?? null) : null,
+    commodity_code: codeByRomInv.get(int(u.type_inv_id)) ?? null,
     status_id: statusIdByName(deriveStatus({
       invoiced: !!int(u.sale_invoice_id), pickup_date: u.pickup_date, completion_date: u.completion_date,
       dispatch_date: u.dispatch_date, sold_to: !!int(u.sale_dealer_id), sales_order: !!legacySo,

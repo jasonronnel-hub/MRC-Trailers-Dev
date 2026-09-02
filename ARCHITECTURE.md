@@ -62,6 +62,28 @@ left column, stop and think; the right column is expected to churn.
   as well as the order; currently only staged, not migrated. Decide with TJ
   whether units need their own ref field.
 
+- **Round 2 provisional rules (Sept 2026)** — each is one constant, chosen so
+  the screens work today; none is a business ruling yet.
+  - `src/lib/kpi.js` — the rail's money tile: invoiced **month to date** by
+    invoice date, voided excluded. Confirm the definition with Steve.
+  - `src/lib/attention.js` — Needs Attention thresholds: not ready > 45 days,
+    ready-but-unsold > 21 days, dispatched past delivery ETA, MIA, state
+    unknown, imported with missing data. Agree with TJ and Kim.
+  - `src/lib/ar.js` — overdue = open, not disputed, not lost, past due date
+    (+0 grace); due date = invoice due_date, else invoice date + terms days
+    (invoice terms, else buyer terms, else 30). Buckets 1–30/31–60/61–90/90+.
+    **Lost is manual only** (`invoices.lost`, accounting/admin). Confirm
+    thresholds and escalation with Carrie / accounting.
+  - Bulk import (`ImportModal` + `src/lib/importSheet.js`) maps any supplier
+    sheet by column name; rows land as Purchased Not Ready under one
+    `import_batch`, and rows missing type/location/price/source/identifier
+    queue in Needs Attention as "needs backfill". Review with Catherine
+    against real files.
+  - Inventory columns per status (`src/lib/columns.js`): defaults are the
+    Sept 2026 ruling; users' own picks live in their browser only.
+  - After a sale the list jumps to the Sold view (`AFTER_SALE_VIEW` in
+    Inventory.jsx; set to 'stay' to revert).
+
 ## Migration pipeline (rehearsable end to end)
 
 **Field Mapping §6 is wrong about status.** ROM's `ReadyState` is a 0/1
@@ -71,6 +93,13 @@ first match wins: invoice → Closed; pickup/completion date → Delivered;
 dispatch date → Dispatched; buyer or SO → Sold; ready flag → Ready; else
 Not Ready. `scripts/rom/restatus.mjs` re-applies the rule to already-loaded
 units without replaying the transform.
+
+**Commodity codes** (`commodity_codes`) are ROM's EntInventory ShortNames for
+the trailer division, seeded verbatim; `sales_orders.item_code` and
+`units.commodity_code` reference them. Migration maps OrderDetails.InventoryID
+and TrailerTypeInvID; ROM's free-text item lands in `detail_notes`.
+`units.purchase_date` = BrokerWTHDR.CreatedDate; `sold_date` = the order's date
+(in-app: set by the attach trigger).
 
 **PostgREST caps responses at 1,000 rows** regardless of `.limit()`.
 `fetchEvery()` in api.js walks pages for the tables held in memory

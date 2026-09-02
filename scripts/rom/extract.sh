@@ -48,7 +48,7 @@ SEP="+'|~|'+"
 SCOPE="scoped AS (
   SELECT h.BrokerWTID, h.CompanyID, h.Void, h.PurchDealerID, h.PurchOrderID, h.PurchCustRef,
          h.SaleDealerID, h.SaleOrderID, h.SaleCustRef, h.HaulerID, h.DispatchID, h.TicketNotes,
-         h.ContactID, h.SoldToContactID, h.DeliverToID, h.DeliverWTID,
+         h.ContactID, h.SoldToContactID, h.DeliverToID, h.DeliverWTID, h.CreatedDate,
          td.UnitNum, td.AltUnitNum, td.VIN, td.TrailerSizeID, td.TrailerMakeID, td.TrailerYear,
          td.TrailerTypeInvID, td.MaterialTypeID,
          td.ReadyState, td.ReadyDate, td.SchedDate, td.DispatchDate, td.PickUpDate, td.CompletionDate,
@@ -72,7 +72,7 @@ docker exec "$CONTAINER" /opt/mssql-tools18/bin/sqlcmd \
 
 # ---- units (the validated 23,081-row join + first non-void weight line) ----
 run_query units.psv ";WITH $SCOPE
-SELECT $(i s.BrokerWTID)$SEP$(i s.CompanyID)$SEP$(i s.Void)$SEP$(t s.UnitNum)$SEP$(t s.AltUnitNum)$SEP$(t s.VIN)$SEP$(i s.TrailerSizeID)$SEP$(i s.TrailerMakeID)$SEP$(i s.TrailerYear)$SEP$(i s.ReadyState)$SEP$(d s.ReadyDate)$SEP$(d s.SchedDate)$SEP$(d s.DispatchDate)$SEP$(d s.PickUpDate)$SEP$(d s.CompletionDate)$SEP$(i s.MIA)$SEP$(i s.TitleTypeID)$SEP$(i s.TitleRec)$SEP$(d s.TitleRecDate)$SEP$(d s.TitleSentDate)$SEP$(t s.TitleTrackingNum)$SEP$(i s.PurchDealerID)$SEP$(i s.PurchOrderID)$SEP$(t s.PurchCustRef)$SEP$(i s.SaleDealerID)$SEP$(i s.SaleOrderID)$SEP$(t s.SaleCustRef)$SEP$(i s.HaulerID)$SEP$(i s.DispatchID)$SEP$(t s.TicketNotes)$SEP$(n dd.Gross)$SEP$(n dd.Tare)$SEP$(n dd.Net)$SEP$(n dd.AdjWT)$SEP$(t dd.AdjReason)$SEP$(n dd.ConfirmedGross)$SEP$(n dd.ConfirmedTare)$SEP$(n dd.ConfirmedGross-dd.ConfirmedTare)$SEP$(i dd.SOID)$SEP$(i s.TrailerTypeInvID)$SEP$(t inv.ItemName)$SEP$(t mt.Description)$SEP$(t pc.ContactName)$SEP$(t pc.Address)$SEP$(t sc.ContactName)$SEP$(i s.DeliverToID)$SEP$(t s.DeliverWTID)$SEP$(i dd.POID)$SEP$(i dd.PurchTicketID)$SEP$(i dd.SalesTicketID)$SEP$(t dd.WTUM)$SEP$(i ivd.InvoiceID)
+SELECT $(i s.BrokerWTID)$SEP$(i s.CompanyID)$SEP$(i s.Void)$SEP$(t s.UnitNum)$SEP$(t s.AltUnitNum)$SEP$(t s.VIN)$SEP$(i s.TrailerSizeID)$SEP$(i s.TrailerMakeID)$SEP$(i s.TrailerYear)$SEP$(i s.ReadyState)$SEP$(d s.ReadyDate)$SEP$(d s.SchedDate)$SEP$(d s.DispatchDate)$SEP$(d s.PickUpDate)$SEP$(d s.CompletionDate)$SEP$(i s.MIA)$SEP$(i s.TitleTypeID)$SEP$(i s.TitleRec)$SEP$(d s.TitleRecDate)$SEP$(d s.TitleSentDate)$SEP$(t s.TitleTrackingNum)$SEP$(i s.PurchDealerID)$SEP$(i s.PurchOrderID)$SEP$(t s.PurchCustRef)$SEP$(i s.SaleDealerID)$SEP$(i s.SaleOrderID)$SEP$(t s.SaleCustRef)$SEP$(i s.HaulerID)$SEP$(i s.DispatchID)$SEP$(t s.TicketNotes)$SEP$(n dd.Gross)$SEP$(n dd.Tare)$SEP$(n dd.Net)$SEP$(n dd.AdjWT)$SEP$(t dd.AdjReason)$SEP$(n dd.ConfirmedGross)$SEP$(n dd.ConfirmedTare)$SEP$(n dd.ConfirmedGross-dd.ConfirmedTare)$SEP$(i dd.SOID)$SEP$(i s.TrailerTypeInvID)$SEP$(t inv.ItemName)$SEP$(t mt.Description)$SEP$(t pc.ContactName)$SEP$(t pc.Address)$SEP$(t sc.ContactName)$SEP$(i s.DeliverToID)$SEP$(t s.DeliverWTID)$SEP$(i dd.POID)$SEP$(i dd.PurchTicketID)$SEP$(i dd.SalesTicketID)$SEP$(t dd.WTUM)$SEP$(i ivd.InvoiceID)$SEP$(d s.CreatedDate)
 FROM scoped s
 OUTER APPLY (SELECT TOP 1 * FROM dbo.BrokerWTDTL d
              WHERE d.BrokerWTID = s.BrokerWTID AND d.CompanyID = s.CompanyID AND d.DTLVoid = 0
@@ -104,7 +104,7 @@ WHERE c.DealerID IN (
 
 # ---- orders (referenced by scoped tickets, either leg, incl. BrokerWTDTL.SOID) ----
 run_query orders.psv ";WITH $SCOPE
-SELECT $(i o.OrderID)$SEP$(i o.CompanyID)$SEP$(i o.CustomerID)$SEP$(i o.OrderType)$SEP$(d o.OrderDate)$SEP$(d o.CreatedDate)$SEP$(t o.ExternalOrderNum)$SEP$(t o.OrderNotes)$SEP$(t o.Terms)$SEP$(d o.ClosedDate)$SEP$(i o.Void)$SEP$(t od.ItemText)$SEP$(t od.UMID)$SEP$(t od.WTUM)$SEP$(n od.UnitsOrdered)$SEP$(n od.Price)
+SELECT $(i o.OrderID)$SEP$(i o.CompanyID)$SEP$(i o.CustomerID)$SEP$(i o.OrderType)$SEP$(d o.OrderDate)$SEP$(d o.CreatedDate)$SEP$(t o.ExternalOrderNum)$SEP$(t o.OrderNotes)$SEP$(t o.Terms)$SEP$(d o.ClosedDate)$SEP$(i o.Void)$SEP$(t od.ItemText)$SEP$(t od.UMID)$SEP$(t od.WTUM)$SEP$(n od.UnitsOrdered)$SEP$(n od.Price)$SEP$(i od.InventoryID)
 FROM dbo.OrderHeader o
 OUTER APPLY (SELECT TOP 1 * FROM dbo.OrderDetails x
              WHERE x.OrderID = o.OrderID AND x.CompanyID = o.CompanyID
@@ -123,7 +123,7 @@ linked AS (
    AND x.TicketCompanyID = sc2.CompanyID AND x.DTLVoid = 0
   JOIN dbo.Invoice iv2 ON iv2.InvoiceID = x.InvoiceID AND iv2.InvoiceType = x.InvoiceType AND iv2.CompanyID = x.CompanyID
    AND iv2.CustomerID = sc2.SaleDealerID)
-SELECT $(i i.InvoiceID)$SEP$(i i.CompanyID)$SEP$(i i.CustomerID)$SEP$(d i.InvoiceDate)$SEP$(d i.DueDate)$SEP$(t i.Terms)$SEP$(i i.isOpen)$SEP$(d i.PaymentRecDate)$SEP$(n i.CashPaid)$SEP$(n i.CheckPaid)$SEP$(n i.WirePaid)$SEP$(i i.CheckNumber)$SEP$(t i.PaymentRef)$SEP$(i i.Void)$SEP$(t i.Notes)
+SELECT $(i i.InvoiceID)$SEP$(i i.CompanyID)$SEP$(i i.CustomerID)$SEP$(d i.InvoiceDate)$SEP$(d i.DueDate)$SEP$(t i.Terms)$SEP$(i i.isOpen)$SEP$(d i.PaymentRecDate)$SEP$(n i.CashPaid)$SEP$(n i.CheckPaid)$SEP$(n i.WirePaid)$SEP$(i i.CheckNumber)$SEP$(t i.PaymentRef)$SEP$(i i.Void)$SEP$(t i.Notes)$SEP$(n i.TransactionTotal)
 FROM dbo.Invoice i JOIN linked l
   ON l.InvoiceID = i.InvoiceID AND l.InvoiceType = i.InvoiceType AND l.CompanyID = i.CompanyID"
 

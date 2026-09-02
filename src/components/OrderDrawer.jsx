@@ -2,9 +2,12 @@ import { useEffect, useState } from 'react'
 import Pill from './Pill'
 import { formatPrice, fetchOrderUnits } from '../lib/api'
 import { useNotes, PopupBanners, NotesList } from './Notes'
+import { deductionLabel } from './DeductionsEditor'
+import { buyerOverdue, money } from '../lib/ar'
 
-export default function OrderDrawer({ order: o, role, close, onEdit, onAttach }) {
+export default function OrderDrawer({ order: o, role, invoices = [], close, onEdit, onAttach }) {
   const [units, setUnits] = useState(null)   // lazy-loaded, null = loading
+  const overdue = o.buyer ? buyerOverdue(invoices, o.buyer.id, o.payment_terms?.name) : null
   const notesState = useNotes('sales_order', o.id)
   useEffect(() => {
     fetchOrderUnits(o.id).then(setUnits).catch(() => setUnits([]))
@@ -26,11 +29,28 @@ export default function OrderDrawer({ order: o, role, close, onEdit, onAttach })
         </div>
         <div className="dbody">
           <PopupBanners popups={notesState.popups} />
+          {overdue && (
+            <div className="banner" style={{ background: 'var(--error-tint)', borderColor: 'rgba(179,64,47,0.35)', borderLeftColor: 'var(--error)' }}>
+              <b>{o.buyer.name} is overdue:</b> {overdue.count} invoice{overdue.count === 1 ? '' : 's'}, {money(overdue.amount)}, oldest {overdue.oldest} days past due.
+            </div>
+          )}
           <dl className="kv">
             <dt>Buyer</dt><dd>{o.buyer?.name || '—'}</dd>
             <dt>Customer ref</dt><dd><span className="tag">{o.customer_reference || '—'}</span></dd>
-            <dt>Item code</dt><dd className="mono">{o.item_code || '—'}</dd>
+            <dt>Commodity</dt><dd>{o.item_code ? <><span className="mono">{o.item_code}</span>{o.commodity?.name && <span className="muted"> · {o.commodity.name}</span>}</> : '—'}</dd>
             <dt>Price</dt><dd>{formatPrice(o.price, o.price_unit)}</dd>
+            <dt>Terms</dt><dd>{o.payment_terms?.name || <span className="muted">not set</span>}</dd>
+            <dt>Title</dt>
+            <dd>
+              {o.title_required_with_delivery ? <span className="warnrow">Required with delivery</span> : 'Not required'}
+              {o.title_notes && <div className="muted" style={{ fontSize: 12.5 }}>{o.title_notes}</div>}
+            </dd>
+            <dt>Deductions</dt>
+            <dd>
+              {(o.deductions || []).length
+                ? o.deductions.map((d) => <div key={d.id}>{deductionLabel(d)}</div>)
+                : <span className="muted">none on this order</span>}
+            </dd>
             <dt>Ref weight</dt>
             <dd>{o.ref_weight_lbs ? `${o.ref_weight_lbs.toLocaleString()} lb (Katherine’s spot-check flag)` : '—'}</dd>
             <dt>Created</dt><dd className="mono">{(o.created_at || '').slice(0, 10) || '—'}</dd>

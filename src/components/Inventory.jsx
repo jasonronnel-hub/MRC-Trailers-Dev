@@ -6,10 +6,17 @@ import WeightsModal from './WeightsModal'
 import ImportModal from './ImportModal'
 import SellModal from './SellModal'
 import SearchSelect from './SearchSelect'
-import { statusMeta } from '../lib/statuses'
 import { can, fetchUnitsPage, unitLocation } from '../lib/api'
+import { COLUMNS, loadColumns, saveColumns, resetColumns } from '../lib/columns'
+import { ATTENTION, cutoffs, attentionReasons, needsBackfill } from '../lib/attention'
+import { isOverdue } from '../lib/ar'
 
 const PAGE_SIZE = 50
+
+// After a sale, jump to the Sold view so the units are seen landing where
+// they went (Jason, Sept 2026). Set to 'stay' to keep the pre-Sept behaviour
+// of remaining on the Ready list — one word to revert.
+const AFTER_SALE_VIEW = 'sold'
 
 // Quick views — the anti-overwhelm layer. "Active" (the default) hides the
 // years of Invoiced — Closed history; it's the working pipeline only.
@@ -20,8 +27,11 @@ const VIEWS = [
   { key: 'all', label: 'All' },
 ]
 
+const dash = <span className="muted">—</span>
+const dateCell = (v) => (v ? <span className="mono muted">{v}</span> : dash)
+
 export default function Inventory({ data, counts, role, refresh, statusFilter, setStatusFilter }) {
-  const { statuses, parties, equipTypes, titleTypes } = data
+  const { statuses, parties, equipTypes, titleTypes, invoices = [] } = data
   const [view, setView] = useState('active')
   const [sourceId, setSourceId] = useState('')
   const [buyerId, setBuyerId] = useState('')
@@ -41,6 +51,7 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
   const [selected, setSelected] = useState(new Map())   // id -> unit; survives paging/search
   const [selling, setSelling] = useState(null)          // array of units for the Sell modal
   const [reload, setReload] = useState(0)               // bump to refetch the current page
+  const [colMenu, setColMenu] = useState(false)
 
   // debounce the search box so we don't query per keystroke
   const qTimer = useRef(null)
@@ -52,8 +63,19 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
 
   const suppliers = useMemo(() => parties.filter((p) => p.group?.name === 'Trailer Supplier'), [parties])
   const buyers = useMemo(() => parties.filter((p) => p.group?.name === 'Trailer Buyer'), [parties])
-  const closedId = statuses.find((s) => s.name === 'Invoiced — Closed')?.id
-  const unknownId = statuses.find((s) => s.name === 'State Unknown')?.id
+  const sid = (name) => statuses.find((s) => s.name === name)?.id
+  const closedId = sid('Invoiced — Closed')
+  const unknownId = sid('State Unknown')
+  const statusName = statusFilter ? statuses.find((s) => s.id === statusFilter)?.name : null
+
+  // ---- columns: a default set per status view, adjustable and remembered ----
+  const viewKey = statusName || view
+  const [cols, setCols] = useState(() => loadColumns(viewKey))
+  useEffect(() => { setCols(loadColumns(viewKey)); setColMenu(false) }, [viewKey])
+  const toggleCol = (key) => {
+    const next = cols.includes(key) ? cols.filter((k) => k !== key) : [...cols, key]
+    setCols(next); saveColumns(viewKey, next)
+  }
 
   const filters = useMemo(() => {
     const f = { sourceId: sourceId || null, buyerId: buyerId || null, equipTypeId: equipTypeId || null, q: debouncedQ }
@@ -64,7 +86,6 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
     } else if (view === 'closed') {
       f.statusIds = closedId ? [closedId] : []
     } else if (view === 'attention') {
-      // MIA units + State Unknown — the "something is wrong" pile
       f.attention = true
     }
     return f
@@ -76,13 +97,25 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
     const run = async () => {
       try {
         if (filters.attention) {
-          // two cheap queries, merged: MIA + State Unknown
-          const [mia, unknown] = await Promise.all([
-            fetchUnitsPage({ filters: { ...filters, missingOnly: true, attention: undefined }, sort, page: 0, pageSize: 500 }),
-            unknownId ? fetchUnitsPage({ filters: { ...filters, statusIds: [unknownId], attention: undefined }, sort, page: 0, pageSize: 500 }) : { rows: [], count: 0 },
+          // Needs Attention: a multi-status, date-driven queue. Each condition
+          // is its own cheap query; thresholds live in lib/attention.js.
+          const base = { ...filters, attention: undefined }
+          const c = cutoffs()
+          const pick = (extra, pageSize = 500) => fetchUnitsPage({ filters: { ...base, ...extra }, sort, page: 0, pageSize })
+          const [mia, unknown, stale, unsold, dispatched, imported] = await Promise.all([
+            pick({ missingOnly: true }),
+            unknownId ? pick({ statusIds: [unknownId] }) : { rows: [] },
+            pick({ statusIds: [sid('Purchased Not Ready')], purchasedBefore: c.notReadyBefore }),
+            pick({ statusIds: [sid('Ready — Sales Required')], readyBefore: c.readyBefore }),
+            pick({ statusIds: [sid('Dispatched — Delivery Required')] }, 1000),
+            pick({ importedOnly: true }, 1000),
           ])
           const seen = new Set()
-          const rows = [...mia.rows, ...unknown.rows].filter((u) => !seen.has(u.id) && seen.add(u.id))
+          const rows = [
+            ...mia.rows, ...unknown.rows, ...stale.rows, ...unsold.rows,
+            ...dispatched.rows.filter((u) => u.dispatch?.delivery_eta && u.dispatch.delivery_eta <= c.etaBefore),
+            ...imported.rows.filter((u) => needsBackfill(u).length),
+          ].filter((u) => !seen.has(u.id) && seen.add(u.id))
           if (!cancelled) setResult({ rows, count: rows.length })
         } else {
           const r = await fetchUnitsPage({ filters, sort, page, pageSize: PAGE_SIZE })
@@ -93,7 +126,12 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
     }
     run()
     return () => { cancelled = true }
-  }, [filters, sort, page, unknownId, reload])
+  }, [filters, sort, page, unknownId, reload])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const overdueInvoices = useMemo(() => {
+    const termsOf = (inv) => parties.find((p) => p.id === inv.buyer?.id)?.payment_terms?.name
+    return invoices.filter((i) => isOverdue(i, termsOf(i))).length
+  }, [invoices, parties])
 
   const saved = () => { setFormUnit(null); setDrawerUnit(null); refresh(); setReload((n) => n + 1) }
   // A unit can be sold if nothing has claimed it yet: no SO, not closed, not voided.
@@ -103,15 +141,51 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
   const sold = ({ orderNumber, buyerName, count }) => {
     setSelling(null); setSelected(new Map()); setDrawerUnit(null); refresh(); setReload((n) => n + 1)
     setNotice(`Sold ${count} unit${count === 1 ? '' : 's'} to ${buyerName} on ${orderNumber} — now Sold — Dispatch Required.`)
+    if (AFTER_SALE_VIEW === 'sold') { setView('active'); setStatusFilter(sid('Sold — Dispatch Required')); setPage(0) }
   }
   const pages = Math.max(1, Math.ceil(result.count / PAGE_SIZE))
 
   const sortHeader = (label, col) => (
-    <th style={{ cursor: 'pointer', userSelect: 'none' }}
+    <th style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
       onClick={() => { setSort((s) => ({ col, dir: s.col === col && s.dir === 'asc' ? 'desc' : 'asc' })); setPage(0) }}>
       {label}{sort.col === col ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
     </th>
   )
+
+  // ---- cell renderers, one per column key in lib/columns.js ----
+  const cell = (key, u) => {
+    switch (key) {
+      case 'bwt': return <span className="ticket">W{u.legacy_bwt_id ?? u.id}</span>
+      case 'unit_number': return (<>
+        {u.unit_number || dash}
+        {u.missing && <span className="tag" style={{ marginLeft: 6, color: 'var(--error)', borderColor: 'var(--error)' }}>MIA</span>}
+      </>)
+      case 'vin': return u.vin ? <span className="mono">{u.vin}</span> : dash
+      case 'type': return u.equipment_type?.name || dash
+      case 'commodity': return u.commodity_code ? <span className="mono">{u.commodity_code}</span> : dash
+      case 'make': return u.make?.name || dash
+      case 'model_year': return u.model_year || dash
+      case 'source': return u.source?.name || dash
+      case 'location': return <span className="muted">{unitLocation(u) || '—'}</span>
+      case 'status': return <Pill status={u.status?.name} />
+      case 'purchase_date': return dateCell(u.purchase_date)
+      case 'purchase_price': return u.purchase_price != null ? `$${Number(u.purchase_price).toLocaleString()}` : dash
+      case 'ready_date': return dateCell(u.ready_date)
+      case 'sold_to': return <span className="muted">{u.sold_to?.name || '—'}</span>
+      case 'sales_order': return <span className="mono muted">{u.sales_order?.order_number || '—'}</span>
+      case 'sale_date': return dateCell(u.sold_date)
+      case 'title': return (<>
+        {u.title_type?.name || dash}
+        {u.title_received && <span className="tag" style={{ marginLeft: 6 }}>received</span>}
+      </>)
+      case 'dispatch': return <span className="mono muted">{u.dispatch?.dispatch_number || '—'}</span>
+      case 'dispatch_date': return dateCell(u.dispatch_date || u.dispatch?.scheduled_pickup)
+      case 'delivery_eta': return dateCell(u.dispatch?.delivery_eta)
+      case 'delivered_date': return dateCell(u.completion_date)
+      case 'invoice': return u.invoice ? <span className="mono muted">{u.invoice.invoice_number}{u.invoice.open ? '' : ' · paid'}</span> : dash
+      default: return dash
+    }
+  }
 
   return (
     <div>
@@ -119,13 +193,26 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
         <h2>Inventory</h2>
         <span className="sub">
           {loading ? 'loading…' : `${result.count.toLocaleString()} unit${result.count === 1 ? '' : 's'}`}
+          {statusName && <span className="muted"> · {statusName}</span>}
         </span>
-        {can(role, 'createUnit') && (
-          <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <button className="btn ghost sm" onClick={() => setImporting(true)}>Import bid sheet</button>
+        <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, position: 'relative' }}>
+          <button className="btn ghost sm" onClick={() => setColMenu((v) => !v)}>Columns ▾</button>
+          {colMenu && (
+            <div className="colmenu" onMouseLeave={() => setColMenu(false)}>
+              <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>Columns for <b>{statusName || VIEWS.find((v) => v.key === view)?.label}</b></div>
+              {Object.entries(COLUMNS).map(([key, c]) => (
+                <label key={key} className="checkline" style={{ padding: '2px 0' }}>
+                  <input type="checkbox" checked={cols.includes(key)} onChange={() => toggleCol(key)} /> {c.label}
+                </label>
+              ))}
+              <button className="btn ghost sm" style={{ marginTop: 6 }} onClick={() => setCols(resetColumns(viewKey))}>Reset to default</button>
+            </div>
+          )}
+          {can(role, 'createUnit') && (<>
+            <button className="btn ghost sm" onClick={() => setImporting(true)}>Import spreadsheet</button>
             <button className="btn sm" onClick={() => setFormUnit('new')}>+ New unit</button>
-          </span>
-        )}
+          </>)}
+        </span>
       </div>
 
       {notice && <div className="banner" style={{ marginBottom: 12 }}>{notice}</div>}
@@ -167,6 +254,13 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
         )}
       </div>
 
+      {view === 'attention' && !statusFilter && (
+        <div className="banner" style={{ marginBottom: 10 }}>
+          <b>Queue rules (provisional):</b> not ready over {ATTENTION.notReadyDays} days · ready but unsold over {ATTENTION.readyUnsoldDays} days · dispatched past its delivery ETA · MIA · state unknown · imported with missing data.
+          {overdueInvoices > 0 && <> Also <b>{overdueInvoices} overdue invoice{overdueInvoices === 1 ? '' : 's'}</b> — see the Invoices tab.</>}
+        </div>
+      )}
+
       {canSell && selected.size > 0 && (
         <div className="selbar">
           <b>{selected.size} selected</b>
@@ -182,12 +276,8 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
             <thead>
               <tr>
                 {canSell && <th className="sel"></th>}
-                {sortHeader('BWT', 'id')}
-                {sortHeader('Unit #', 'unit_number')}
-                <th>Type</th><th>Source</th>
-                {sortHeader('Location', 'physical_location')}
-                {sortHeader('Status', 'status')}
-                <th>Sold to</th><th>SO</th>
+                {cols.map((key) => COLUMNS[key].sort ? sortHeader(COLUMNS[key].label, COLUMNS[key].sort) : <th key={key}>{COLUMNS[key].label}</th>)}
+                {view === 'attention' && !statusFilter && <th>Why</th>}
               </tr>
             </thead>
             <tbody>
@@ -199,24 +289,19 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
                         title={sellable(u) ? 'Select to sell' : 'Already on a sales order or closed'} />
                     </td>
                   )}
-                  <td><span className="ticket">W{u.legacy_bwt_id ?? u.id}</span></td>
-                  <td>
-                    {u.unit_number || <span className="muted">—</span>}
-                    {u.missing && <span className="tag" style={{ marginLeft: 6, color: 'var(--error)', borderColor: 'var(--error)' }}>MIA</span>}
-                  </td>
-                  <td>{u.equipment_type?.name || <span className="muted">—</span>}</td>
-                  <td>{u.source?.name || <span className="muted">—</span>}</td>
-                  <td className="muted">{unitLocation(u) || '—'}</td>
-                  <td><Pill status={u.status?.name} /></td>
-                  <td className="muted">{u.sold_to?.name || '—'}</td>
-                  <td className="mono muted">{u.sales_order?.order_number || '—'}</td>
+                  {cols.map((key) => <td key={key}>{cell(key, u)}</td>)}
+                  {view === 'attention' && !statusFilter && (
+                    <td>{attentionReasons(u).map((r) => (
+                      <span key={r} className="tag" style={{ marginRight: 4, color: 'var(--copper-deep)', borderColor: 'var(--copper)' }}>{r}</span>
+                    ))}</td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       ) : (
-        <div className="empty">{loading ? 'Loading…' : <>No units match. <b>Clear the filters</b> or switch views.</>}</div>
+        <div className="empty">{loading ? 'Loading…' : view === 'attention' && !statusFilter ? 'Nothing needs attention right now.' : <>No units match. <b>Clear the filters</b> or switch views.</>}</div>
       )}
 
       {!filters.attention && result.count > PAGE_SIZE && (
@@ -246,15 +331,16 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
       {formUnit && (
         <UnitForm unit={formUnit === 'new' ? null : formUnit}
           statuses={statuses} equipTypes={equipTypes} titleTypes={titleTypes} parties={parties}
+          commodityCodes={data.commodityCodes}
           close={() => setFormUnit(null)} onSaved={saved} />
       )}
       {importing && (
-        <ImportModal parties={parties} equipTypes={equipTypes}
+        <ImportModal parties={parties} equipTypes={equipTypes} commodityCodes={data.commodityCodes}
           close={() => setImporting(false)}
-          onSaved={(n) => {
+          onSaved={({ count, batch, backfill }) => {
             setImporting(false)
-            setNotice(`Imported ${n} unit${n === 1 ? '' : 's'} as Purchased Not Ready — review types and prices, especially 45-ft all-steel units.`)
-            refresh()
+            setNotice(`Imported ${count} unit${count === 1 ? '' : 's'} as Purchased Not Ready (batch ${batch}).${backfill ? ` ${backfill} need data filled in — they’re in Needs attention.` : ''}`)
+            refresh(); setReload((n) => n + 1)
           }} />
       )}
     </div>

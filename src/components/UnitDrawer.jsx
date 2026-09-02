@@ -56,9 +56,13 @@ export default function UnitDrawer({ unit, statuses, role, close, onEdit, onWeig
               {unit.equipment_type?.name || '—'}
               {unit.equipment_type?.item_code && <span className="muted"> (item {unit.equipment_type.item_code})</span>}
             </dd>
+            <dt>Commodity</dt><dd className="mono">{unit.commodity_code || '—'}</dd>
             <dt>Source</dt><dd>{unit.source?.name || '—'}</dd>
             <dt>Ref weight</dt><dd>{unit.ref_weight_lbs ? `${fmt(unit.ref_weight_lbs)} lb` : '—'}</dd>
-            <dt>Purchase price</dt><dd>{unit.purchase_price != null ? `$${fmt(unit.purchase_price)}` : '—'}</dd>
+            <dt>Purchase price</dt><dd>{unit.purchase_price != null ? `$${fmt(unit.purchase_price)}` : '—'}{unit.purchase_rate != null && <span className="muted"> · rate {unit.purchase_rate}{unit.purchase_rate_unit ? ` ${unit.purchase_rate_unit.replace('per_', '/')}` : ''}</span>}</dd>
+            <dt>Purchase date</dt><dd className="mono">{unit.purchase_date || '—'}</dd>
+            {unit.purchase_order_ref && (<><dt>PO ref</dt><dd className="mono">{unit.purchase_order_ref}</dd></>)}
+            {unit.import_batch && (<><dt>Import batch</dt><dd className="mono">{unit.import_batch}</dd></>)}
             <dt>Title</dt>
             <dd>
               {unit.title_type?.name || '—'}
@@ -89,6 +93,7 @@ export default function UnitDrawer({ unit, statuses, role, close, onEdit, onWeig
               {unit.sales_order?.order_number || '—'}
               {unit.sales_order?.customer_reference && <span className="muted"> · {unit.sales_order.customer_reference}</span>}
             </dd>
+            <dt>Sale date</dt><dd className="mono">{unit.sold_date || '—'}</dd>
             <dt>Dispatch</dt><dd className="mono">{unit.dispatch?.dispatch_number || '—'}</dd>
             {(unit.net_wt != null || unit.confirmed_net != null) && (<>
               <dt>Weights</dt>

@@ -351,3 +351,8 @@ td.sel input { accent-color: var(--copper); width: 15px; height: 15px; }
 .est-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
 .est-row:last-child { border-bottom: 0; }
 .est-row .amt { margin-left: auto; font-family: var(--mono, ui-monospace, monospace); }
+
+/* Inventory column picker */
+.colmenu { position: absolute; right: 0; top: 34px; z-index: 30; background: #fff; border: 1px solid var(--line);
+  border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); padding: 10px 14px; min-width: 200px;
+  max-height: 60vh; overflow: auto; font-size: 13px; text-align: left; }

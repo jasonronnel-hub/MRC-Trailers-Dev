@@ -2,10 +2,11 @@ import { useState } from 'react'
 import Modal from './Modal'
 import SearchSelect from './SearchSelect'
 import { saveUnit } from '../lib/api'
+import { CommoditySelect } from './SellModal'
 
 const F = (v) => v ?? ''
 
-export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parties, close, onSaved }) {
+export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parties, commodityCodes = [], close, onSaved }) {
   const editing = !!unit
   const suppliers = parties.filter((p) => p.group?.name === 'Trailer Supplier')
   const [f, setF] = useState({
@@ -27,6 +28,11 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
     pickup_location_code: F(unit?.pickup_location_code),
     pickup_address: F(unit?.pickup_address),
     purchase_price: F(unit?.purchase_price),
+    purchase_rate: F(unit?.purchase_rate),
+    purchase_rate_unit: unit?.purchase_rate_unit ?? 'per_lb',
+    purchase_date: F(unit?.purchase_date) || (unit ? '' : new Date().toISOString().slice(0, 10)),
+    purchase_order_ref: F(unit?.purchase_order_ref),
+    commodity_code: F(unit?.commodity_code),
     ref_weight_lbs: F(unit?.ref_weight_lbs),
     condition_comments: F(unit?.condition_comments),
     material_type: F(unit?.material_type),
@@ -43,7 +49,9 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
     // when the field is empty or still holding the previous type's default.
     const prev = equipTypes.find((x) => String(x.id) === String(f.equipment_type_id))
     const shouldFill = f.ref_weight_lbs === '' || (prev && String(f.ref_weight_lbs) === String(prev.default_ref_weight_lbs ?? ''))
-    setF({ ...f, equipment_type_id: id, ref_weight_lbs: shouldFill ? F(t?.default_ref_weight_lbs) : f.ref_weight_lbs })
+    // Commodity follows the type's ROM code unless one was already chosen.
+    setF({ ...f, equipment_type_id: id, ref_weight_lbs: shouldFill ? F(t?.default_ref_weight_lbs) : f.ref_weight_lbs,
+      commodity_code: f.commodity_code || F(t?.item_code) })
   }
 
   const submit = async (e) => {
@@ -65,6 +73,11 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
         pickup_location_code: f.pickup_location_code || null,
         pickup_address: f.pickup_address || null,
         purchase_price: f.purchase_price === '' ? null : Number(f.purchase_price),
+        purchase_rate: f.purchase_rate === '' ? null : Number(f.purchase_rate),
+        purchase_rate_unit: f.purchase_rate === '' ? null : f.purchase_rate_unit,
+        purchase_date: f.purchase_date || null,
+        purchase_order_ref: f.purchase_order_ref || null,
+        commodity_code: f.commodity_code || null,
         ref_weight_lbs: f.ref_weight_lbs === '' ? null : parseInt(f.ref_weight_lbs, 10),
         condition_comments: f.condition_comments || null,
         material_type: f.material_type || null,
@@ -142,8 +155,29 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
             <input value={f.pickup_address} onChange={set('pickup_address')} />
           </div>
           <div className="field">
+            <label>Commodity (ROM code)</label>
+            <CommoditySelect value={f.commodity_code} onChange={(v) => setF({ ...f, commodity_code: v })} commodityCodes={commodityCodes} />
+          </div>
+          <div className="field">
+            <label>Purchase date</label>
+            <input type="date" value={f.purchase_date} onChange={set('purchase_date')} />
+          </div>
+          <div className="field">
             <label>Purchase price ($)</label>
             <input type="number" step="any" min="0" value={f.purchase_price} onChange={set('purchase_price')} />
+          </div>
+          <div className="field">
+            <label>Purchase rate</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input type="number" step="any" min="0" style={{ flex: 1 }} value={f.purchase_rate} onChange={set('purchase_rate')} placeholder="optional" />
+              <select style={{ flex: 1 }} value={f.purchase_rate_unit} onChange={set('purchase_rate_unit')}>
+                <option value="per_lb">/lb</option><option value="per_nt">/NT</option><option value="per_gt">/GT</option><option value="per_mt">/MT</option><option value="flat">flat</option>
+              </select>
+            </div>
+          </div>
+          <div className="field">
+            <label>PO reference</label>
+            <input value={f.purchase_order_ref} onChange={set('purchase_order_ref')} placeholder="supplier PO / bid #" />
           </div>
           <div className="field">
             <label>Ref weight (lb)</label>

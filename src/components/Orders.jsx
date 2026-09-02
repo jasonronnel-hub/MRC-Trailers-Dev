@@ -73,17 +73,17 @@ export default function Orders({ data, role, refresh }) {
       )}
 
       {drawerOrder && (
-        <OrderDrawer order={drawerOrder} role={role} close={() => setDrawerOrder(null)}
+        <OrderDrawer order={drawerOrder} invoices={data.invoices} role={role} close={() => setDrawerOrder(null)}
           onEdit={can(role, 'editOrder') ? () => setFormOrder(drawerOrder) : null}
           onAttach={can(role, 'attachUnits') && drawerOrder.open ? () => setAttachOrder(drawerOrder) : null} />
       )}
       {formOrder && (
-        <OrderForm order={formOrder === 'new' ? null : formOrder} orders={orders}
+        <OrderForm order={formOrder === 'new' ? null : formOrder} orders={orders} paymentTerms={data.paymentTerms} commodityCodes={data.commodityCodes} role={role}
           parties={parties} equipTypes={equipTypes}
           close={() => setFormOrder(null)} onSaved={saved} />
       )}
       {attachOrder && (
-        <AttachUnitsModal order={attachOrder} statuses={data.statuses}
+        <AttachUnitsModal order={attachOrder} statuses={data.statuses} invoices={data.invoices}
           close={() => setAttachOrder(null)} onSaved={saved} />
       )}
     </div>

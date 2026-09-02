@@ -2,12 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import Modal from './Modal'
 import Pill from './Pill'
 import { attachUnits, fetchUnitsPage, unitLocation } from '../lib/api'
+import { formatPrice } from '../lib/api'
+import { deductionLabel } from './DeductionsEditor'
+import { buyerOverdue, money } from '../lib/ar'
 
 // Attaching works off an EXPLICITLY checked list of units — never "everything
 // in the current view" (Spec §2.6). Candidates are fetched from the server
 // (Ready + unattached by default, searchable), so this scales past 23k units.
 // Checked units stay checked across searches.
-export default function AttachUnitsModal({ order, statuses, close, onSaved }) {
+export default function AttachUnitsModal({ order, statuses, invoices = [], close, onSaved }) {
+  const overdue = order.buyer ? buyerOverdue(invoices, order.buyer.id, order.payment_terms?.name) : null
   const [q, setQ] = useState('')
   const [readyOnly, setReadyOnly] = useState(true)
   const [candidates, setCandidates] = useState(null)
@@ -55,10 +59,21 @@ export default function AttachUnitsModal({ order, statuses, close, onSaved }) {
 
   return (
     <Modal title={`Attach units to ${order.order_number}`} close={close}>
-      <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
-        Buyer: <b>{order.buyer?.name}</b>. Attached units flip to
-        <b> Sold — Dispatch Required</b> automatically and the change is audit-logged.
-      </p>
+      {/* Review the deal before anything gets attached to it. */}
+      <div className="banner" style={{ marginTop: 0 }}>
+        <b>{order.buyer?.name}</b> · <b>{formatPrice(order.price, order.price_unit)}</b>
+        <span className="muted"> · {order.payment_terms?.name || 'terms not set'}{order.item_code ? ` · ${order.item_code}` : ''}</span>
+        <div style={{ fontSize: 12.5, marginTop: 4 }}>
+          Deductions: {(order.deductions || []).length ? order.deductions.map(deductionLabel).join('; ') : <span className="muted">none on this order</span>}
+        </div>
+        {order.title_required_with_delivery && <div className="warnrow" style={{ fontSize: 12.5, marginTop: 2 }}>Title must travel with the delivery.</div>}
+        <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>Attached units flip to <b>Sold — Dispatch Required</b> automatically and the change is audit-logged.</div>
+      </div>
+      {overdue && (
+        <div className="banner" style={{ background: 'var(--error-tint)', borderColor: 'rgba(179,64,47,0.35)', borderLeftColor: 'var(--error)' }}>
+          <b>{order.buyer.name} is overdue:</b> {overdue.count} invoice{overdue.count === 1 ? '' : 's'}, {money(overdue.amount)}, oldest {overdue.oldest} days past due.
+        </div>
+      )}
       {order.buyer && !order.buyer.destruction_agreement_signed && (
         <div className="banner" style={{ background: 'var(--error-tint)', borderColor: 'rgba(179,64,47,0.35)', borderLeftColor: 'var(--error)' }}>
           <b>⚑ {order.buyer.name} has NO destruction agreement on file.</b> Do not ship

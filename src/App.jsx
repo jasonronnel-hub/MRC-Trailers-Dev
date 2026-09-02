@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase, signOut } from './lib/supabase'
-import { fetchAll, fetchMyRole, fetchStatusCounts } from './lib/api'
+import { fetchAll, fetchMyRole, fetchStatusCounts, fetchInvoicedTotal } from './lib/api'
+import { kpiRange, kpiDefinition } from './lib/kpi'
 import { SignIn, MfaVerify, MfaEnroll, NoRole } from './components/Login'
 import Logo from './components/Logo'
 import PipelineRail from './components/PipelineRail'
@@ -64,15 +65,26 @@ export default function App() {
 function Shell({ role, email }) {
   const [data, setData] = useState(null)
   const [counts, setCounts] = useState({})
+  const [kpi, setKpi] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [err, setErr] = useState('')
   const [tab, setTab] = useState('inventory')
   const [statusFilter, setStatusFilter] = useState(null)
 
   const refresh = useCallback(
-    () => Promise.all([fetchAll(), fetchStatusCounts()])
-      .then(([d, c]) => { setData(d); setCounts(c); setRefreshKey((k) => k + 1) })
-      .catch((e) => setErr(e.message)),
+    () => {
+      const range = kpiRange()
+      return Promise.all([fetchAll(), fetchStatusCounts(), fetchInvoicedTotal(range.from, range.to).catch(() => null)])
+        .then(([d, c, inv]) => {
+          setData(d); setCounts(c); setRefreshKey((k) => k + 1)
+          if (inv) setKpi({
+            value: `$${Math.round(inv.total).toLocaleString()}`,
+            label: `invoiced · ${range.label}`,
+            title: `${inv.count} invoices. ${kpiDefinition(range)}`,
+          })
+        })
+        .catch((e) => setErr(e.message))
+    },
     [],
   )
   useEffect(() => { refresh() }, [refresh])
@@ -89,7 +101,7 @@ function Shell({ role, email }) {
     <>
       <div className="topbar">
         <div className="brand"><Logo /></div>
-        <PipelineRail statuses={statuses} counts={counts}
+        <PipelineRail statuses={statuses} counts={counts} kpi={kpi}
           statusFilter={statusFilter}
           setStatusFilter={(s) => { setTab('inventory'); setStatusFilter(s) }} />
         <div className="userchip">
