@@ -114,6 +114,11 @@ WHERE o.OrderID IN (
   UNION SELECT PurchOrderID FROM scoped WHERE PurchOrderID > 0
   UNION SELECT d.SOID FROM dbo.BrokerWTDTL d JOIN scoped s2 ON d.BrokerWTID = s2.BrokerWTID AND d.CompanyID = s2.CompanyID WHERE d.SOID > 0)"
 
+# Invoice amount: ROM keeps no total on the header (TransactionTotal is
+# null everywhere) — it is the sum of the settlement lines: per-each price,
+# or settle weight in the line's unit (LB / NT / GT / MT) x settle price.
+# Matched the one trailer invoice with a recorded payment to the cent;
+# CONFIRM WITH KATHERINE before cutover.
 # ---- invoices (headers for every invoice a scoped unit's sale line points at) ----
 run_query invoices.psv ";WITH $SCOPE,
 linked AS (
@@ -123,7 +128,7 @@ linked AS (
    AND x.TicketCompanyID = sc2.CompanyID AND x.DTLVoid = 0
   JOIN dbo.Invoice iv2 ON iv2.InvoiceID = x.InvoiceID AND iv2.InvoiceType = x.InvoiceType AND iv2.CompanyID = x.CompanyID
    AND iv2.CustomerID = sc2.SaleDealerID)
-SELECT $(i i.InvoiceID)$SEP$(i i.CompanyID)$SEP$(i i.CustomerID)$SEP$(d i.InvoiceDate)$SEP$(d i.DueDate)$SEP$(t i.Terms)$SEP$(i i.isOpen)$SEP$(d i.PaymentRecDate)$SEP$(n i.CashPaid)$SEP$(n i.CheckPaid)$SEP$(n i.WirePaid)$SEP$(i i.CheckNumber)$SEP$(t i.PaymentRef)$SEP$(i i.Void)$SEP$(t i.Notes)$SEP$(n i.TransactionTotal)
+SELECT $(i i.InvoiceID)$SEP$(i i.CompanyID)$SEP$(i i.CustomerID)$SEP$(d i.InvoiceDate)$SEP$(d i.DueDate)$SEP$(t i.Terms)$SEP$(i i.isOpen)$SEP$(d i.PaymentRecDate)$SEP$(n i.CashPaid)$SEP$(n i.CheckPaid)$SEP$(n i.WirePaid)$SEP$(i i.CheckNumber)$SEP$(t i.PaymentRef)$SEP$(i i.Void)$SEP$(t i.Notes)$SEP$(n "(SELECT SUM(CASE WHEN x.PriceUM IN ('EA','Each') THEN x.SettlePrice WHEN x.PriceUM='LB' THEN x.SettleWTTotal*x.SettlePrice WHEN x.PriceUM='GT' THEN x.SettleWTTotal/2240.0*x.SettlePrice WHEN x.PriceUM IN ('MT','MTon') THEN x.SettleWTTotal/2204.62262*x.SettlePrice WHEN x.PriceUM IN ('NT','NTon','TON') THEN x.SettleWTTotal/2000.0*x.SettlePrice END) FROM dbo.InvoiceDetail x WHERE x.InvoiceID=i.InvoiceID AND x.InvoiceType=i.InvoiceType AND x.CompanyID=i.CompanyID AND x.DTLVoid=0)")
 FROM dbo.Invoice i JOIN linked l
   ON l.InvoiceID = i.InvoiceID AND l.InvoiceType = i.InvoiceType AND l.CompanyID = i.CompanyID"
 

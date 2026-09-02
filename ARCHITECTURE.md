@@ -101,6 +101,12 @@ and TrailerTypeInvID; ROM's free-text item lands in `detail_notes`.
 `units.purchase_date` = BrokerWTHDR.CreatedDate; `sold_date` = the order's date
 (in-app: set by the attach trigger).
 
+**Invoice amounts** are computed at extract time from ROM's settlement lines
+(per-each price, or settle weight in the line's unit x settle price) because
+the header total is null throughout the backup. Verified against the single
+trailer invoice that records a payment amount — Katherine must confirm the
+formula before cutover.
+
 **PostgREST caps responses at 1,000 rows** regardless of `.limit()`.
 `fetchEvery()` in api.js walks pages for the tables held in memory
 (parties, orders, dispatches); anything larger must be server-paged like

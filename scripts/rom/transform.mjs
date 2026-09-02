@@ -253,8 +253,8 @@ const invoiceRows = stInvoices.map((v) => {
     buyer_party_id: party.get(int(v.customer_id)) ?? null,
     invoice_date: dateOnly(v.invoice_date), due_date: dateOnly(v.due_date),
     terms: v.terms || null,
-    // Invoice total is ROM's TransactionTotal; before it was extracted the
-    // paid sum stood in, which left every OPEN invoice blank.
+    // Invoice total = sum of ROM settlement lines (see extract.sh); before it
+    // was extracted the paid sum stood in, which left every OPEN invoice blank.
     amount: num(v.transaction_total) ?? (paidSum > 0 ? paidSum : null),
     open: !paid && v.void !== '1',
     paid_date: dateOnly(v.payment_rec_date),
