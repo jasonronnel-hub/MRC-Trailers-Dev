@@ -184,7 +184,13 @@ export default function DispatchForm({ dispatch, dispatches, parties, units = []
           </div>
           <div className="field">
             <label>Pickup address</label>
-            <input value={f.pickup_address} onChange={set('pickup_address')} />
+            <input value={f.pickup_address} onChange={set('pickup_address')} placeholder="from the unit’s purchase location" />
+            {fromUnits && !f.pickup_address && (
+              <div className="fieldnote warnrow">
+                {pickups.length > 1 ? 'Units sit at different locations — enter the route.'
+                  : 'No street address on the unit’s purchase record — enter it, or add it to the unit.'}
+              </div>
+            )}
           </div>
           <div className="field">
             <label>Destination (buying yard)</label>
@@ -199,6 +205,9 @@ export default function DispatchForm({ dispatch, dispatches, parties, units = []
           <div className="field">
             <label>Destination address</label>
             <input value={f.destination_address} onChange={set('destination_address')} placeholder="from the yard’s billing address" />
+            {destination && !f.destination_address && (
+              <div className="fieldnote warnrow">{destination.name} has no address on its account — enter it here, or add it to the account so it fills next time.</div>
+            )}
           </div>
           <div className="field">
             <label>Scheduled pickup</label>
