@@ -32,7 +32,7 @@ function StatusHistory({ unitId, statuses }) {
   )
 }
 
-export default function UnitDrawer({ unit, statuses, role, close, onEdit, onWeights, onSell, onDispatch }) {
+export default function UnitDrawer({ unit, statuses, role, close, onEdit, onWeights, onReady, onSell, onDispatch, onDeliver, onInvoice }) {
   const notesState = useNotes('unit', unit?.id)
   if (!unit) return null
   return (
@@ -44,8 +44,11 @@ export default function UnitDrawer({ unit, statuses, role, close, onEdit, onWeig
             <div className="kind">Unit · broker weight ticket</div>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            {onSell && <button className="btn sm" onClick={onSell}>Sell…</button>}
+            {onReady && <button className="btn sm" onClick={onReady}>Mark ready</button>}
+            {onSell && <button className={'btn sm' + (onReady ? ' ghost' : '')} onClick={onSell}>Sell…</button>}
             {onDispatch && <button className="btn sm" onClick={onDispatch}>Dispatch…</button>}
+            {onDeliver && <button className="btn sm" onClick={onDeliver}>Mark delivered</button>}
+            {onInvoice && <button className="btn sm" onClick={onInvoice}>Invoice…</button>}
             {onWeights && <button className="btn ghost sm" onClick={onWeights}>Weights…</button>}
             {onEdit && <button className="btn ghost sm" onClick={onEdit}>Edit</button>}
             <button className="x" onClick={close} aria-label="Close" style={{ marginLeft: 0 }}>×</button>

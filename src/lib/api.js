@@ -557,6 +557,32 @@ export async function assignUnitsToDispatch(dispatchId, unitIds) {
   if (error) throw error
 }
 
+// Flip an EXPLICIT list of units to Ready — Sales Required and stamp the
+// ready date. This is ROM's "ready, sale required" checkbox — the flag TJ
+// watches — and until now nothing in the app set it. Audit-logged by trigger.
+export async function markUnitsReady(unitIds, readyStatusId) {
+  if (!unitIds.length) return
+  const { error } = await supabase.from('units')
+    .update({ status_id: readyStatusId, ready_date: new Date().toISOString().slice(0, 10) })
+    .in('id', unitIds)
+  if (error) throw error
+}
+
+// One-step invoice (mirrors sellUnits / dispatchUnits): create the invoice —
+// or add to an open one for the same buyer — and attach an EXPLICIT list of
+// delivered units. The attach path flips them to Invoiced — Closed.
+export async function invoiceUnits({ invoice, invoiceId, unitIds }) {
+  let id = invoiceId
+  let invoice_number = null
+  if (!id) {
+    const { data, error } = await supabase.from('invoices').insert(invoice).select('id, invoice_number').single()
+    if (error) throw error
+    id = data.id; invoice_number = data.invoice_number
+  }
+  await assignUnitsToInvoice(id, unitIds)
+  return { id, invoice_number }
+}
+
 // Mark an EXPLICIT list of units delivered: status + completion date.
 // The audit trigger logs the status change.
 export async function markUnitsDelivered(unitIds, deliveredStatusId) {

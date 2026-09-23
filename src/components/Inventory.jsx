@@ -6,13 +6,19 @@ import WeightsModal from './WeightsModal'
 import ImportModal from './ImportModal'
 import SellModal from './SellModal'
 import DispatchForm from './DispatchForm'
+import InvoiceModal from './InvoiceModal'
 import SearchSelect from './SearchSelect'
-import { can, fetchUnitsPage, unitLocation } from '../lib/api'
+import { can, fetchUnitsPage, unitLocation, markUnitsReady, markUnitsDelivered } from '../lib/api'
 import { COLUMNS, loadColumns, saveColumns, resetColumns } from '../lib/columns'
 import { ATTENTION, cutoffs, attentionReasons, needsBackfill } from '../lib/attention'
 import { isOverdue } from '../lib/ar'
 
 const PAGE_SIZE = 50
+
+// App remounts this screen when data refreshes (key={refreshKey}), which
+// wiped the "Sold 2 units…" banner before anyone read it. Park the message
+// here across the remount.
+let pendingNotice = ''
 
 // After a sale, jump to the Sold view so the units are seen landing where
 // they went (Jason, Sept 2026). Set to 'stay' to keep the pre-Sept behaviour
@@ -48,10 +54,12 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
   const [formUnit, setFormUnit] = useState(null)
   const [weightsUnit, setWeightsUnit] = useState(null)
   const [importing, setImporting] = useState(false)
-  const [notice, setNotice] = useState('')
+  const [notice, setNotice] = useState(() => { const n = pendingNotice; pendingNotice = ''; return n })
   const [selected, setSelected] = useState(new Map())   // id -> unit; survives paging/search
   const [selling, setSelling] = useState(null)          // array of units for the Sell modal
   const [dispatching, setDispatching] = useState(null)  // array of units for the Dispatch form
+  const [invoicing, setInvoicing] = useState(null)      // array of units for the Invoice modal
+  const [acting, setActing] = useState(false)
   const [reload, setReload] = useState(0)               // bump to refetch the current page
   const [colMenu, setColMenu] = useState(false)
 
@@ -136,31 +144,70 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
   }, [invoices, parties])
 
   const saved = () => { setFormUnit(null); setDrawerUnit(null); refresh(); setReload((n) => n + 1) }
-  // A unit can be sold if nothing has claimed it yet: no SO, not closed, not voided.
-  const sellable = (u) => !u.sales_order && u.status?.name !== 'Invoiced — Closed' && !u.voided
-  // Sold and not yet on a hauling ticket: Kim's queue.
-  const dispatchable = (u) => u.status?.name === 'Sold — Dispatch Required' && !u.dispatch && !u.voided
-  const toggle = (u) => setSelected((m) => { const n = new Map(m); n.has(u.id) ? n.delete(u.id) : n.set(u.id, u); return n })
+  // ---- stage-aware selection: the checkbox does the NEXT thing at every stage ----
+  // Not Ready → Mark ready (or Sell); Ready → Sell; Sold → Dispatch;
+  // Dispatched → Mark delivered; Delivered → Invoice. One column, one bar.
+  const st = (u) => u.status?.name
+  const notReady = (u) => st(u) === 'Purchased Not Ready' && !u.voided
+  const sellable = (u) => !u.sales_order && st(u) !== 'Invoiced — Closed' && !u.voided
+  const dispatchable = (u) => st(u) === 'Sold — Dispatch Required' && !u.dispatch && !u.voided
+  const deliverable = (u) => st(u) === 'Dispatched — Delivery Required' && !u.voided
+  const invoiceable = (u) => st(u) === 'Delivered — Invoice Required' && !u.invoice && !u.voided
+  const canReady = can(role, 'editUnit')
   const canSell = can(role, 'createOrder')
   const canDispatch = can(role, 'createDispatch')
-  const selectable = (u) => (canSell && sellable(u)) || (canDispatch && dispatchable(u))
+  const canDeliver = can(role, 'editDispatch')
+  const canInvoice = can(role, 'createInvoice')
+  const selectable = (u) => (canReady && notReady(u)) || (canSell && sellable(u)) || (canDispatch && dispatchable(u))
+    || (canDeliver && deliverable(u)) || (canInvoice && invoiceable(u))
+  const anySelectable = canReady || canSell || canDispatch || canDeliver || canInvoice
+  const hint = (u) => notReady(u) ? 'Select to mark ready or sell' : sellable(u) ? 'Select to sell' : dispatchable(u) ? 'Select to dispatch'
+    : deliverable(u) ? 'Select to mark delivered' : invoiceable(u) ? 'Select to invoice' : 'Nothing to do from here'
+  const toggle = (u) => setSelected((m) => { const n = new Map(m); n.has(u.id) ? n.delete(u.id) : n.set(u.id, u); return n })
   const sel = [...selected.values()]
-  const allSellable = sel.length > 0 && sel.every(sellable)
-  const allDispatchable = sel.length > 0 && sel.every(dispatchable)
+  const all = (pred) => sel.length > 0 && sel.every(pred)
+  const allNotReady = all(notReady), allSellable = all(sellable), allDispatchable = all(dispatchable)
+  const allDeliverable = all(deliverable), allInvoiceable = all(invoiceable)
+  const anyAction = (canReady && allNotReady) || (canSell && allSellable) || (canDispatch && allDispatchable) || (canDeliver && allDeliverable) || (canInvoice && allInvoiceable)
+
+  const done = (msg, nextStatus) => {
+    pendingNotice = msg
+    setSelected(new Map()); setDrawerUnit(null); refresh(); setReload((n) => n + 1); setNotice(msg)
+    if (nextStatus) { setView('active'); setStatusFilter(sid(nextStatus)); setPage(0) }
+  }
+  const markReady = async (units) => {
+    setActing(true); setErr('')
+    try {
+      await markUnitsReady(units.map((u) => u.id), sid('Ready — Sales Required'))
+      done(`Marked ${units.length} unit${units.length === 1 ? '' : 's'} ready — now Ready — Sales Required.`, 'Ready — Sales Required')
+    } catch (e) { setErr(e.message) }
+    setActing(false)
+  }
+  const markDelivered = async (units) => {
+    setActing(true); setErr('')
+    try {
+      await markUnitsDelivered(units.map((u) => u.id), sid('Delivered — Invoice Required'))
+      done(`Marked ${units.length} unit${units.length === 1 ? '' : 's'} delivered — now Delivered — Invoice Required.`, 'Delivered — Invoice Required')
+    } catch (e) { setErr(e.message) }
+    setActing(false)
+  }
   const dispatched = ({ dispatchNumber, haulerName, count }) => {
-    setDispatching(null); setSelected(new Map()); setDrawerUnit(null); refresh(); setReload((n) => n + 1)
-    setNotice(`Dispatched ${count} unit${count === 1 ? '' : 's'} on ${dispatchNumber}${haulerName ? ` with ${haulerName}` : ''} — now Dispatched — Delivery Required.`)
-    setView('active'); setStatusFilter(sid('Dispatched — Delivery Required')); setPage(0)
+    setDispatching(null)
+    done(`Dispatched ${count} unit${count === 1 ? '' : 's'} on ${dispatchNumber}${haulerName ? ` with ${haulerName}` : ''} — now Dispatched — Delivery Required.`, 'Dispatched — Delivery Required')
+  }
+  const invoiced = ({ invoiceNumber, buyerName, count }) => {
+    setInvoicing(null)
+    done(`Invoiced ${count} unit${count === 1 ? '' : 's'} to ${buyerName} on ${invoiceNumber} — now Invoiced — Closed.`, 'Invoiced — Closed')
   }
   const sold = ({ orderNumber, buyerName, count }) => {
-    setSelling(null); setSelected(new Map()); setDrawerUnit(null); refresh(); setReload((n) => n + 1)
-    setNotice(`Sold ${count} unit${count === 1 ? '' : 's'} to ${buyerName} on ${orderNumber} — now Sold — Dispatch Required.`)
-    if (AFTER_SALE_VIEW === 'sold') { setView('active'); setStatusFilter(sid('Sold — Dispatch Required')); setPage(0) }
+    setSelling(null)
+    done(`Sold ${count} unit${count === 1 ? '' : 's'} to ${buyerName} on ${orderNumber} — now Sold — Dispatch Required.`,
+      AFTER_SALE_VIEW === 'sold' ? 'Sold — Dispatch Required' : null)
   }
   const pages = Math.max(1, Math.ceil(result.count / PAGE_SIZE))
 
   const sortHeader = (label, col) => (
-    <th style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+    <th key={col} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
       onClick={() => { setSort((s) => ({ col, dir: s.col === col && s.dir === 'asc' ? 'desc' : 'asc' })); setPage(0) }}>
       {label}{sort.col === col ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
     </th>
@@ -279,10 +326,13 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
         <div className="selbar">
           <b>{selected.size} selected</b>
           <span className="names">{sel.slice(0, 8).map((u) => u.unit_number || `W${u.legacy_bwt_id ?? u.id}`).join(', ')}{selected.size > 8 ? ', …' : ''}</span>
-          <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-            {canSell && allSellable && <button className="btn sm" onClick={() => setSelling(sel)}>Sell {selected.size} unit{selected.size === 1 ? '' : 's'}…</button>}
+          <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            {canReady && allNotReady && <button className="btn sm" disabled={acting} onClick={() => markReady(sel)}>{acting ? 'Working…' : `Mark ${selected.size} ready`}</button>}
+            {canSell && allSellable && <button className={'btn sm' + (allNotReady ? ' ghost' : '')} onClick={() => setSelling(sel)}>Sell {selected.size} unit{selected.size === 1 ? '' : 's'}…</button>}
             {canDispatch && allDispatchable && <button className="btn sm" onClick={() => setDispatching(sel)}>Dispatch {selected.size} unit{selected.size === 1 ? '' : 's'}…</button>}
-            {!allSellable && !allDispatchable && <span className="muted" style={{ fontSize: 12.5 }}>Mixed selection — pick units that are all unsold, or all sold and awaiting dispatch.</span>}
+            {canDeliver && allDeliverable && <button className="btn sm" disabled={acting} onClick={() => markDelivered(sel)}>{acting ? 'Working…' : `Mark ${selected.size} delivered`}</button>}
+            {canInvoice && allInvoiceable && <button className="btn sm" onClick={() => setInvoicing(sel)}>Invoice {selected.size} unit{selected.size === 1 ? '' : 's'}…</button>}
+            {!anyAction && <span className="muted" style={{ fontSize: 12.5 }}>Mixed selection — pick units at the same stage.</span>}
             <button className="btn ghost sm" onClick={() => setSelected(new Map())}>Clear</button>
           </span>
         </div>
@@ -293,7 +343,7 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
           <table>
             <thead>
               <tr>
-                {(canSell || canDispatch) && <th className="sel"></th>}
+                {anySelectable && <th className="sel"></th>}
                 {cols.map((key) => COLUMNS[key].sort ? sortHeader(COLUMNS[key].label, COLUMNS[key].sort) : <th key={key}>{COLUMNS[key].label}</th>)}
                 {view === 'attention' && !statusFilter && <th>Why</th>}
               </tr>
@@ -301,10 +351,9 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
             <tbody>
               {result.rows.map((u) => (
                 <tr key={u.id} onClick={() => setDrawerUnit(u)}>
-                  {(canSell || canDispatch) && (
+                  {anySelectable && (
                     <td className="sel" onClick={(e) => e.stopPropagation()}>
-                      <input type="checkbox" disabled={!selectable(u)} checked={selected.has(u.id)} onChange={() => toggle(u)}
-                        title={sellable(u) ? 'Select to sell' : dispatchable(u) ? 'Select to dispatch' : 'Nothing to do from here'} />
+                      <input type="checkbox" disabled={!selectable(u)} checked={selected.has(u.id)} onChange={() => toggle(u)} title={hint(u)} />
                     </td>
                   )}
                   {cols.map((key) => <td key={key}>{cell(key, u)}</td>)}
@@ -336,8 +385,14 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
         <UnitDrawer unit={drawerUnit} statuses={statuses} role={role} close={() => setDrawerUnit(null)}
           onEdit={can(role, 'editUnit') ? () => setFormUnit(drawerUnit) : null}
           onWeights={can(role, 'editUnit') ? () => setWeightsUnit(drawerUnit) : null}
+          onReady={canReady && notReady(drawerUnit) ? () => markReady([drawerUnit]) : null}
           onSell={canSell && sellable(drawerUnit) ? () => setSelling([drawerUnit]) : null}
-          onDispatch={canDispatch && dispatchable(drawerUnit) ? () => setDispatching([drawerUnit]) : null} />
+          onDispatch={canDispatch && dispatchable(drawerUnit) ? () => setDispatching([drawerUnit]) : null}
+          onDeliver={canDeliver && deliverable(drawerUnit) ? () => markDelivered([drawerUnit]) : null}
+          onInvoice={canInvoice && invoiceable(drawerUnit) ? () => setInvoicing([drawerUnit]) : null} />
+      )}
+      {invoicing && (
+        <InvoiceModal units={invoicing} data={data} close={() => setInvoicing(null)} onSaved={invoiced} />
       )}
       {dispatching && (
         <DispatchForm units={dispatching} dispatches={data.dispatches} parties={parties} close={() => setDispatching(null)} onSaved={dispatched} />
