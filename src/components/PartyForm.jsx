@@ -4,7 +4,7 @@ import SearchSelect from './SearchSelect'
 import { saveParty, saveContact, saveDeduction, deleteDeduction } from '../lib/api'
 
 const F = (v) => v ?? ''
-const newContact = () => ({ id: null, name: '', email: '', phone: '', is_default: false, active: true, _dirty: true })
+const newContact = () => ({ id: null, name: '', email: '', phone: '', address: '', is_default: false, active: true, _dirty: true })
 const newDeduction = () => ({ id: null, description: '', kind: 'weight', basis: 'per_unit', rate: '', _dirty: true })
 
 export default function PartyForm({ party, groups, paymentTerms, close, onSaved }) {
@@ -182,12 +182,14 @@ export default function PartyForm({ party, groups, paymentTerms, close, onSaved 
 
           {editing && (
             <div className="field full">
-              <label>Contacts</label>
+              <label>Contacts &amp; sites</label>
+              <div className="fieldnote" style={{ marginBottom: 6 }}>A fleet’s stations are sites here (e.g. “FXG - Portland OR - 972”); the address is what the dispatch form pulls as the pickup address.</div>
               {contacts.map((c, i) => (
                 <div key={c.id ?? `new-${i}`} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center', opacity: c.active === false ? 0.45 : 1 }}>
                   <input style={{ flex: 2 }} placeholder="Name" value={F(c.name)} onChange={(e) => setContact(i, 'name', e.target.value)} />
                   <input style={{ flex: 3 }} placeholder="Email" value={F(c.email)} onChange={(e) => setContact(i, 'email', e.target.value)} />
                   <input style={{ flex: 2 }} placeholder="Phone" value={F(c.phone)} onChange={(e) => setContact(i, 'phone', e.target.value)} />
+                  <input style={{ flex: 4 }} placeholder="Street address (sites: where trucks pick up)" value={F(c.address)} onChange={(e) => setContact(i, 'address', e.target.value)} />
                   <label className="checkline" style={{ padding: 0, fontSize: 11.5, whiteSpace: 'nowrap' }} title="Default contact">
                     <input type="checkbox" checked={!!c.is_default} onChange={(e) => setContact(i, 'is_default', e.target.checked)} /> def
                   </label>

@@ -3,6 +3,7 @@ import Modal from './Modal'
 import SearchSelect from './SearchSelect'
 import { saveUnit } from '../lib/api'
 import { CommoditySelect } from './SellModal'
+import { shortLocation } from '../lib/location'
 
 const F = (v) => v ?? ''
 
@@ -17,6 +18,7 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
       ? equipTypes.find((t) => t.name === unit.equipment_type.name)?.id ?? ''
       : '',
     source_party_id: unit?.source?.id ?? '',
+    purchase_contact_id: unit?.purchase_site?.id ?? '',
     status_id: unit?.status?.id ?? statuses.find((s) => s.name === 'Purchased Not Ready')?.id,
     title_type_id: unit?.title_type
       ? titleTypes.find((t) => t.name === unit.title_type.name)?.id ?? ''
@@ -46,6 +48,9 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })
+  // Sites (stations) under the chosen fleet — the purchase location is one of these.
+  const sourceSites = (parties.find((p) => String(p.id) === String(f.source_party_id))?.contacts || []).filter((c) => c.active !== false)
+  const site = sourceSites.find((c) => String(c.id) === String(f.purchase_contact_id))
 
   const pickEquip = (e) => {
     const id = e.target.value
@@ -69,6 +74,7 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
         vin: f.vin || null,
         equipment_type_id: f.equipment_type_id || null,
         source_party_id: f.source_party_id || null,
+        purchase_contact_id: f.purchase_contact_id || null,
         status_id: f.status_id,
         title_type_id: f.title_type_id || null,
         title_received: f.title_received,
@@ -139,7 +145,21 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
             <SearchSelect placeholder="Type to find the fleet…" style={{ width: '100%' }}
               options={suppliers.map((s) => ({ id: s.id, label: s.name }))}
               value={f.source_party_id}
-              onChange={(v) => setF({ ...f, source_party_id: v })} />
+              onChange={(v) => setF({ ...f, source_party_id: v, purchase_contact_id: '' })} />
+          </div>
+          <div className="field">
+            <label>Purchase location (site under the fleet)</label>
+            <SearchSelect placeholder={sourceSites.length ? 'Type to find the station…' : 'Pick the fleet first'} style={{ width: '100%' }}
+              options={sourceSites.map((c) => ({ id: c.id, label: c.address ? `${c.name} · ${shortLocation(null, c.address) || ''}` : c.name }))}
+              value={f.purchase_contact_id}
+              onChange={(v) => {
+                const site = sourceSites.find((c) => String(c.id) === String(v))
+                setF({ ...f, purchase_contact_id: v, physical_location: f.physical_location || (site ? shortLocation(site.name, site.address) || '' : '') })
+              }} />
+            {site?.address
+              ? <div className="fieldnote" style={{ whiteSpace: 'pre-wrap' }}>{site.address}</div>
+              : site ? <div className="fieldnote warnrow">This site has no address on record — add it on the fleet’s account.</div>
+              : sourceSites.length === 0 && f.source_party_id ? <div className="fieldnote">No sites on this fleet’s account yet — add stations on the account, or type the location below.</div> : null}
           </div>
           <div className="field">
             <label>Status</label>

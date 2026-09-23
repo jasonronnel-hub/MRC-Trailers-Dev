@@ -84,6 +84,7 @@ export default function PartyDrawer({ party: p, orders, dispatches = [], role, c
                   {c.is_default && <span className="tag" style={{ marginLeft: 6 }}>default</span>}
                   {c.email && <span className="mono muted" style={{ marginLeft: 8, fontSize: 12 }}>{c.email}</span>}
                   {c.phone && <span className="muted" style={{ marginLeft: 8 }}>{c.phone}</span>}
+                  {c.address && <div className="muted" style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>{c.address}</div>}
                 </div>
               ))}
             </div>

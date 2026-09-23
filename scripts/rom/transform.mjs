@@ -169,10 +169,12 @@ const contactRows = contacts.map((c) => ({
   legacy_contact_id: int(c.contact_id),
   party_id: party.get(int(c.dealer_id)),
   name: c.contact_name, email: c.email, phone: c.phone1,
-  notes: c.notes, trucking_notes: c.trucking_notes,
+  notes: c.notes, trucking_notes: c.trucking_notes, address: c.address || null,
   is_default: c.is_default === '1', active: c.active !== '0',
 })).filter((c) => c.legacy_contact_id != null && c.party_id != null)
 await upsert('party_contacts', contactRows, 'legacy_contact_id', 'party_contacts')
+const contactIds = await fetchAllRows('party_contacts', 'id, legacy_contact_id', (q) => q.not('legacy_contact_id', 'is', null))
+const contactById = new Map(contactIds.map((c) => [c.legacy_contact_id, c.id]))
 
 // ---------- 4. trailer makes (canonical values from the crosswalk) ----------
 const canonicalMakes = [...new Set([...makeXwalk.values()].filter(Boolean))].sort()
@@ -317,6 +319,7 @@ const unitRows = stUnits.map((u) => {
     // stay on purchase_location / purchase_location_address for the drawer.
     physical_location: shortLocation(u.purch_contact_name, u.purch_contact_address),
     // ROM grid-parity fields (Field Mapping §3 + Jason's grid screenshots)
+    purchase_contact_id: contactById.get(int(u.purch_contact_id)) ?? null,   // the site record the ticket points at
     purchase_location: u.purch_contact_name || null,
     purchase_location_address: u.purch_contact_address || null,
     sale_location: u.sold_contact_name || null,

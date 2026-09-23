@@ -20,6 +20,7 @@ export const UNIT_SELECT = `
   purchase_order_ref, purchase_rate, purchase_rate_unit,
   scheduled_date, pickup_date, title_received_date, replacement_for,
   make:trailer_makes ( name ),
+  purchase_site:party_contacts!units_purchase_contact_id_fkey ( id, name, address ),
   status:unit_statuses ( id, name, sort_order ),
   equipment_type:equipment_types ( name, item_code ),
   title_type:title_types ( name ),
@@ -68,7 +69,7 @@ export async function fetchAll() {
       rema_member, merged_parent, general_notes, trucking_notes,
       purchase_hot_notes, report_recipients, active, title_required_with_delivery,
       group:party_groups ( id, name ),
-      contacts:party_contacts ( id, name, email, phone, is_default, active, notes, trucking_notes ),
+      contacts:party_contacts ( id, name, email, phone, address, is_default, active, notes, trucking_notes ),
       deductions:party_deductions ( id, description, kind, basis, rate ),
       payment_terms:payment_terms ( id, name )
     `, o).eq('active', true).order('name')),

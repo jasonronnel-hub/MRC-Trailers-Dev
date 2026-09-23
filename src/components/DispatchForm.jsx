@@ -41,7 +41,11 @@ export default function DispatchForm({ dispatch, dispatches, parties, units = []
   const solePickup = pickups.length === 1 ? pickups[0] : ''
   // Addresses are multi-line in ROM; the form field is one line.
   const oneLine = (a) => (a || '').split('\n').map((l) => l.trim()).filter(Boolean).join(', ')
-  const pickupAddr = uniq(units.map((u) => oneLine(u.purchase_location_address || u.pickup_address)))
+  // The purchase location is a site record under the fleet account; its
+  // address lives there. The flattened fields are the migrated fallback.
+  const siteAddr = (u) => u.purchase_site?.address || u.purchase_location_address || u.pickup_address
+  const pickupAddr = uniq(units.map((u) => oneLine(siteAddr(u))))
+  const sites = uniq(units.map((u) => u.purchase_site?.name || u.purchase_location))
 
   const [f, setF] = useState({
     hauler_party_id: dispatch?.hauler?.id ?? '',
@@ -188,7 +192,9 @@ export default function DispatchForm({ dispatch, dispatches, parties, units = []
             {fromUnits && !f.pickup_address && (
               <div className="fieldnote warnrow">
                 {pickups.length > 1 ? 'Units sit at different locations — enter the route.'
-                  : 'No street address on the unit’s purchase record — enter it, or add it to the unit.'}
+                  : sites.length === 1 && units[0].purchase_site ? `The ${sites[0]} site has no address on its record — add it to the site under ${units[0].source?.name || 'the fleet account'} and it fills next time.`
+                  : sites.length === 1 ? `No site record for ${sites[0]} — pick the site on the unit, or add it under ${units[0].source?.name || 'the fleet account'}.`
+                  : `No purchase site on the unit — pick one on the unit under ${units[0].source?.name || 'the fleet account'}.`}
               </div>
             )}
           </div>

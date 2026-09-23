@@ -35,6 +35,7 @@ const FILES = {
     'po_id', 'purch_ticket_id', 'sales_ticket_id', 'wt_um', 'sale_invoice_id',
     'created_date',
     'replacement_for',
+    'purch_contact_id',
   ]],
   'invoices.psv': ['staging_invoices', [
     'invoice_id', 'company_id', 'customer_id', 'invoice_date', 'due_date', 'terms',
@@ -55,6 +56,7 @@ const FILES = {
   'contacts.psv': ['staging_contacts', [
     'contact_id', 'dealer_id', 'contact_name', 'email', 'phone1',
     'notes', 'trucking_notes', 'is_default', 'active',
+    'address',
   ]],
   'orders.psv': ['staging_orders', [
     'order_id', 'company_id', 'customer_id', 'order_type', 'order_date', 'created_date',

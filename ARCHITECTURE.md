@@ -107,6 +107,13 @@ the header total is null throughout the backup. Verified against the single
 trailer invoice that records a payment amount — Katherine must confirm the
 formula before cutover.
 
+**Purchase locations are site records** (`party_contacts` with an `address`,
+under the fleet account — ROM EntContacts; FedEx Ground has 668 stations).
+`units.purchase_contact_id` points at the site; the dispatch form reads the
+pickup address from there. `purchase_location` / `purchase_location_address`
+on the unit are the flattened migrated fallback only. In-app, the unit form
+picks the site under the chosen fleet; sites are added on the account.
+
 **`units.replacement_for`** is ROM's TrailerDetails.ReplacementFor, migrated 1:1.
 Nominally the old trailer's info on a replacement unit; Kim uses it as the
 dispatch note because ROM had nowhere else (1,065 of 23,081 carry one). Shown

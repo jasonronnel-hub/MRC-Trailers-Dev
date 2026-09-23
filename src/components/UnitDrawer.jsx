@@ -80,9 +80,9 @@ export default function UnitDrawer({ unit, statuses, role, close, onEdit, onWeig
               <dt>Location</dt><dd>{unitLocation(unit) || '—'}</dd>
               <dt>Purchase location</dt>
               <dd>
-                {unit.purchase_location || unit.pickup_location_code || '—'}
-                {(unit.purchase_location_address || unit.pickup_address) && (
-                  <><br /><span className="muted">{unit.purchase_location_address || unit.pickup_address}</span></>
+                {unit.purchase_site?.name || unit.purchase_location || unit.pickup_location_code || '—'}
+                {(unit.purchase_site?.address || unit.purchase_location_address || unit.pickup_address) && (
+                  <><br /><span className="muted" style={{ whiteSpace: 'pre-wrap' }}>{unit.purchase_site?.address || unit.purchase_location_address || unit.pickup_address}</span></>
                 )}
               </dd>
               <dt>Purchase price</dt><dd>{unit.purchase_price != null ? `$${fmt(unit.purchase_price)}` : '—'}{unit.purchase_rate != null && <span className="muted"> · rate {unit.purchase_rate}{unit.purchase_rate_unit ? ` ${unit.purchase_rate_unit.replace('per_', '/')}` : ''}</span>}</dd>
