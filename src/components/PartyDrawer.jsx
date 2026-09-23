@@ -89,12 +89,6 @@ export default function PartyDrawer({ party: p, orders, dispatches = [], role, c
             </div>
           )}
 
-          {p.general_notes && (
-            <div className="banner"><b>Notes:</b> <span style={{ whiteSpace: 'pre-wrap' }}>{p.general_notes}</span></div>
-          )}
-          {p.trucking_notes && (
-            <div className="banner"><b>Kim’s trucking notes:</b> <span style={{ whiteSpace: 'pre-wrap' }}>{p.trucking_notes}</span></div>
-          )}
 
           {isHauler && (<>
             <b>Dispatch history ({haulerDispatches.length})</b>
@@ -121,7 +115,17 @@ export default function PartyDrawer({ party: p, orders, dispatches = [], role, c
             )) : <div className="muted" style={{ fontSize: 13 }}>None yet.</div>}
           </>)}
 
-          <NotesList entityType="party" entityId={p.id} notesState={notesState} role={role} />
+          {/* One consolidated Notes section: ROM's dealer/trucking/contact note
+              fields pinned on top, then the dated history (typed, filterable). */}
+          <NotesList entityType="party" entityId={p.id} notesState={notesState} role={role}
+            pinned={[
+              { label: isHauler ? 'Hauler notes' : 'Account notes', text: p.general_notes },
+              { label: 'Kim’s trucking notes', text: p.trucking_notes },
+              ...(p.contacts || []).flatMap((c) => [
+                { label: `Contact · ${c.name || 'unnamed'}`, text: c.notes },
+                { label: `Trucking · ${c.name || 'unnamed'}`, text: c.trucking_notes },
+              ]),
+            ]} />
         </div>
       </div>
     </div>

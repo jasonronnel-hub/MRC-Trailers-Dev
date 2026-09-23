@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fetchNotes, addNote, voidNote, can } from '../lib/api'
 
 // Notes machinery shared by the unit and buyer drawers. ROM parity:
@@ -33,8 +33,21 @@ export function PopupBanners({ popups }) {
   ))
 }
 
-export function NotesList({ entityType, entityId, notesState, role }) {
+// One consolidated Notes section per record (Jason, Sept 2026). `pinned` are
+// the standing free-text fields ROM kept on the record itself (dealer notes,
+// Kim's trucking notes, contact notes…) — shown first, labelled by source,
+// then the dated history. Type chips narrow a long list (haulers carry
+// hundreds of ROM "Import Notes").
+export function NotesList({ entityType, entityId, notesState, role, pinned = [] }) {
   const { loading, regular, reload, err } = notesState
+  const [typeFilter, setTypeFilter] = useState(null)
+  const types = useMemo(() => {
+    const c = {}
+    for (const n of regular) { const k = n.note_type || 'Untyped'; c[k] = (c[k] || 0) + 1 }
+    return Object.entries(c).sort((a, b) => b[1] - a[1])
+  }, [regular])
+  const shown = typeFilter ? regular.filter((n) => (n.note_type || 'Untyped') === typeFilter) : regular
+  const pins = pinned.filter((p) => p.text && String(p.text).trim())
   const [text, setText] = useState('')
   const [popup, setPopup] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -57,7 +70,7 @@ export function NotesList({ entityType, entityId, notesState, role }) {
 
   return (
     <div style={{ marginTop: 16 }}>
-      <b>Notes{loading ? '' : ` (${regular.length})`}</b>
+      <b>Notes{loading ? '' : ` (${regular.length + pins.length})`}</b>
       {(err || addErr) && <div className="auth-err" style={{ marginTop: 6 }}>{err || addErr}</div>}
 
       {can(role, 'addNote') && (
@@ -77,10 +90,26 @@ export function NotesList({ entityType, entityId, notesState, role }) {
         </form>
       )}
 
+      {pins.map((p, i) => (
+        <div key={`pin-${i}`} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', margin: '6px 0', fontSize: 13 }}>
+          <div className="muted" style={{ fontSize: 11.5, marginBottom: 3 }}><span className="tag">{p.label}</span></div>
+          <div style={{ whiteSpace: 'pre-wrap' }}>{p.text}</div>
+        </div>
+      ))}
+
+      {!loading && types.length > 1 && (
+        <div className="filters" style={{ margin: '8px 0 4px', gap: 4 }}>
+          <span className={'chip' + (!typeFilter ? ' on' : '')} onClick={() => setTypeFilter(null)}>All {regular.length}</span>
+          {types.map(([t, n]) => (
+            <span key={t} className={'chip' + (typeFilter === t ? ' on' : '')} onClick={() => setTypeFilter(typeFilter === t ? null : t)}>{t} {n}</span>
+          ))}
+        </div>
+      )}
+
       {loading ? (
         <div className="muted" style={{ fontSize: 13 }}>Loading…</div>
-      ) : regular.length ? (
-        regular.map((n) => (
+      ) : shown.length ? (
+        shown.map((n) => (
           <div key={n.id} style={{ borderTop: '1px solid var(--line)', padding: '8px 0', fontSize: 13 }}>
             <div style={{ whiteSpace: 'pre-wrap' }}>{n.note_text}</div>
             <div className="muted" style={{ fontSize: 11.5, marginTop: 3, display: 'flex', gap: 8 }}>
@@ -95,7 +124,7 @@ export function NotesList({ entityType, entityId, notesState, role }) {
           </div>
         ))
       ) : (
-        <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>No notes yet.</div>
+        <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{pins.length ? 'No dated notes.' : 'No notes yet.'}</div>
       )}
     </div>
   )

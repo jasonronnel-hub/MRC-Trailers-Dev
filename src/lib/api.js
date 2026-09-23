@@ -68,7 +68,7 @@ export async function fetchAll() {
       rema_member, merged_parent, general_notes, trucking_notes,
       purchase_hot_notes, report_recipients, active, title_required_with_delivery,
       group:party_groups ( id, name ),
-      contacts:party_contacts ( id, name, email, phone, is_default, active ),
+      contacts:party_contacts ( id, name, email, phone, is_default, active, notes, trucking_notes ),
       deductions:party_deductions ( id, description, kind, basis, rate ),
       payment_terms:payment_terms ( id, name )
     `, o).eq('active', true).order('name')),
