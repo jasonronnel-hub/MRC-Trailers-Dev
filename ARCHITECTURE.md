@@ -107,6 +107,13 @@ the header total is null throughout the backup. Verified against the single
 trailer invoice that records a payment amount — Katherine must confirm the
 formula before cutover.
 
+**`units.replacement_for`** is ROM's TrailerDetails.ReplacementFor, migrated 1:1.
+Nominally the old trailer's info on a replacement unit; Kim uses it as the
+dispatch note because ROM had nowhere else (1,065 of 23,081 carry one). Shown
+at the top of the unit drawer and on both dispatch screens; in the search.
+The unit drawer's two-column block is Kim's ROM "Trailer Info" tab in her
+order — keep it that way.
+
 **PostgREST caps responses at 1,000 rows** regardless of `.limit()`.
 `fetchEvery()` in api.js walks pages for the tables held in memory
 (parties, orders, dispatches); anything larger must be server-paged like

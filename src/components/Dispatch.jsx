@@ -137,7 +137,16 @@ export default function Dispatch({ data, role, refresh }) {
                       {drawerUnits.map((u) => (
                         <tr key={u.id} style={{ cursor: 'default' }}>
                           <td><span className="ticket">W{u.legacy_bwt_id ?? u.id}</span></td>
-                          <td>{u.unit_number || '—'}</td>
+                          <td>
+                            {u.unit_number || '—'}
+                            <div className="muted" style={{ fontSize: 12 }}>
+                              {[u.model_year, u.make?.name, u.equipment_type?.name].filter(Boolean).join(' ')}
+                              {u.vin && <> · <span className="mono">{u.vin}</span></>}
+                              <> · title {u.title_received ? 'received' : 'NOT received'}</>
+                              {u.missing && <span className="warnrow"> · MIA</span>}
+                            </div>
+                            {u.replacement_for && <div style={{ fontSize: 12, color: 'var(--copper-deep)' }}>Note: {u.replacement_for}</div>}
+                          </td>
                           <td><Pill status={u.status?.name} /></td>
                           <td>
                             {writable && u.status?.name === 'Dispatched — Delivery Required' && (

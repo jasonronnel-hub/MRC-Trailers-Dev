@@ -18,6 +18,7 @@ export const UNIT_SELECT = `
   gross_wt, tare_wt, net_wt, confirmed_net, tire_count,
   purchase_date, ready_date, sold_date, dispatch_date, completion_date, commodity_code, import_batch,
   purchase_order_ref, purchase_rate, purchase_rate_unit,
+  scheduled_date, pickup_date, title_received_date, replacement_for,
   make:trailer_makes ( name ),
   status:unit_statuses ( id, name, sort_order ),
   equipment_type:equipment_types ( name, item_code ),
@@ -58,7 +59,7 @@ async function fetchInvoicesWorkingSet(cols) {
 }
 
 export async function fetchAll() {
-  const [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches, invoices, paymentTerms, commodityCodes] = await Promise.all([
+  const [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches, invoices, paymentTerms, commodityCodes, makes] = await Promise.all([
     supabase.from('unit_statuses').select('id, name, sort_order').order('sort_order'),
     fetchEvery((o) => supabase.from('parties').select(`
       id, name, billing_address, city, state, zip,
@@ -107,14 +108,15 @@ export async function fetchAll() {
     `),
     supabase.from('payment_terms').select('id, name, active').order('sort_order'),
     supabase.from('commodity_codes').select('code, name, active').order('code'),
+    supabase.from('trailer_makes').select('id, name').order('name'),
   ])
-  for (const r of [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches, invoices, paymentTerms, commodityCodes]) if (r.error) throw r.error
+  for (const r of [statuses, parties, orders, groups, equipTypes, titleTypes, dispatches, invoices, paymentTerms, commodityCodes, makes]) if (r.error) throw r.error
   return {
     statuses: statuses.data, parties: parties.data, orders: orders.data,
     groups: groups.data, equipTypes: equipTypes.data, titleTypes: titleTypes.data,
     dispatches: dispatches.data, invoices: invoices.data, paymentTerms: paymentTerms.data,
     invoicesPaidTruncated: !!invoices.truncated,
-    commodityCodes: commodityCodes.data,
+    commodityCodes: commodityCodes.data, makes: makes.data,
   }
 }
 
@@ -156,7 +158,8 @@ export async function fetchUnitsPage({ filters = {}, sort = {}, page = 0, pageSi
   if (filters.importBatch) q = q.eq('import_batch', filters.importBatch)
   if (filters.q?.trim()) {
     const needle = filters.q.trim().replaceAll(',', ' ').replaceAll('%', '')
-    q = q.or(['unit_number', 'alt_unit_number', 'vin', 'physical_location', 'purchase_location']
+    // Kim: the trailer-info fields must be searchable — notes included.
+    q = q.or(['unit_number', 'alt_unit_number', 'vin', 'physical_location', 'purchase_location', 'replacement_for', 'condition_comments', 'title_tracking_num']
       .map((c) => `${c}.ilike.%${needle}%`).join(','))
   }
 
@@ -164,6 +167,7 @@ export async function fetchUnitsPage({ filters = {}, sort = {}, page = 0, pageSi
     id: 'id', unit_number: 'unit_number', physical_location: 'physical_location', status: 'status_id', model_year: 'model_year',
     vin: 'vin', purchase_date: 'purchase_date', ready_date: 'ready_date', sold_date: 'sold_date',
     dispatch_date: 'dispatch_date', completion_date: 'completion_date', commodity_code: 'commodity_code',
+    pickup_date: 'pickup_date', title_received_date: 'title_received_date',
   }
   const col = SORT_COLS[sort.col]
   if (col) q = q.order(col, { ascending: sort.dir !== 'desc', nullsFirst: false })

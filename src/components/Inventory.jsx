@@ -243,6 +243,9 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
       case 'dispatch_date': return dateCell(u.dispatch_date || u.dispatch?.scheduled_pickup)
       case 'delivery_eta': return dateCell(u.dispatch?.delivery_eta)
       case 'delivered_date': return dateCell(u.completion_date)
+      case 'pickup_date': return dateCell(u.pickup_date)
+      case 'title_rec_date': return dateCell(u.title_received_date)
+      case 'note': return u.replacement_for ? <span className="muted" title={u.replacement_for} style={{ display: 'inline-block', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>{u.replacement_for}</span> : dash
       case 'invoice': return u.invoice ? <span className="mono muted">{u.invoice.invoice_number}{u.invoice.open ? '' : ' · paid'}</span> : dash
       default: return dash
     }
@@ -408,7 +411,7 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
       {formUnit && (
         <UnitForm unit={formUnit === 'new' ? null : formUnit}
           statuses={statuses} equipTypes={equipTypes} titleTypes={titleTypes} parties={parties}
-          commodityCodes={data.commodityCodes}
+          commodityCodes={data.commodityCodes} makes={data.makes}
           close={() => setFormUnit(null)} onSaved={saved} />
       )}
       {importing && (

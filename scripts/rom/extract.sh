@@ -52,7 +52,8 @@ SCOPE="scoped AS (
          td.UnitNum, td.AltUnitNum, td.VIN, td.TrailerSizeID, td.TrailerMakeID, td.TrailerYear,
          td.TrailerTypeInvID, td.MaterialTypeID,
          td.ReadyState, td.ReadyDate, td.SchedDate, td.DispatchDate, td.PickUpDate, td.CompletionDate,
-         td.MIA, td.TitleTypeID, td.TitleRec, td.TitleRecDate, td.TitleSentDate, td.TitleTrackingNum
+         td.MIA, td.TitleTypeID, td.TitleRec, td.TitleRecDate, td.TitleSentDate, td.TitleTrackingNum,
+         td.ReplacementFor
   FROM dbo.BrokerWTHDR h
   JOIN dbo.TrailerDetails td
     ON td.pTransID = h.BrokerWTID AND td.pObjCompanyID = h.CompanyID
@@ -72,7 +73,7 @@ docker exec "$CONTAINER" /opt/mssql-tools18/bin/sqlcmd \
 
 # ---- units (the validated 23,081-row join + first non-void weight line) ----
 run_query units.psv ";WITH $SCOPE
-SELECT $(i s.BrokerWTID)$SEP$(i s.CompanyID)$SEP$(i s.Void)$SEP$(t s.UnitNum)$SEP$(t s.AltUnitNum)$SEP$(t s.VIN)$SEP$(i s.TrailerSizeID)$SEP$(i s.TrailerMakeID)$SEP$(i s.TrailerYear)$SEP$(i s.ReadyState)$SEP$(d s.ReadyDate)$SEP$(d s.SchedDate)$SEP$(d s.DispatchDate)$SEP$(d s.PickUpDate)$SEP$(d s.CompletionDate)$SEP$(i s.MIA)$SEP$(i s.TitleTypeID)$SEP$(i s.TitleRec)$SEP$(d s.TitleRecDate)$SEP$(d s.TitleSentDate)$SEP$(t s.TitleTrackingNum)$SEP$(i s.PurchDealerID)$SEP$(i s.PurchOrderID)$SEP$(t s.PurchCustRef)$SEP$(i s.SaleDealerID)$SEP$(i s.SaleOrderID)$SEP$(t s.SaleCustRef)$SEP$(i s.HaulerID)$SEP$(i s.DispatchID)$SEP$(t s.TicketNotes)$SEP$(n dd.Gross)$SEP$(n dd.Tare)$SEP$(n dd.Net)$SEP$(n dd.AdjWT)$SEP$(t dd.AdjReason)$SEP$(n dd.ConfirmedGross)$SEP$(n dd.ConfirmedTare)$SEP$(n dd.ConfirmedGross-dd.ConfirmedTare)$SEP$(i dd.SOID)$SEP$(i s.TrailerTypeInvID)$SEP$(t inv.ItemName)$SEP$(t mt.Description)$SEP$(t pc.ContactName)$SEP$(t pc.Address)$SEP$(t sc.ContactName)$SEP$(i s.DeliverToID)$SEP$(t s.DeliverWTID)$SEP$(i dd.POID)$SEP$(i dd.PurchTicketID)$SEP$(i dd.SalesTicketID)$SEP$(t dd.WTUM)$SEP$(i ivd.InvoiceID)$SEP$(d s.CreatedDate)
+SELECT $(i s.BrokerWTID)$SEP$(i s.CompanyID)$SEP$(i s.Void)$SEP$(t s.UnitNum)$SEP$(t s.AltUnitNum)$SEP$(t s.VIN)$SEP$(i s.TrailerSizeID)$SEP$(i s.TrailerMakeID)$SEP$(i s.TrailerYear)$SEP$(i s.ReadyState)$SEP$(d s.ReadyDate)$SEP$(d s.SchedDate)$SEP$(d s.DispatchDate)$SEP$(d s.PickUpDate)$SEP$(d s.CompletionDate)$SEP$(i s.MIA)$SEP$(i s.TitleTypeID)$SEP$(i s.TitleRec)$SEP$(d s.TitleRecDate)$SEP$(d s.TitleSentDate)$SEP$(t s.TitleTrackingNum)$SEP$(i s.PurchDealerID)$SEP$(i s.PurchOrderID)$SEP$(t s.PurchCustRef)$SEP$(i s.SaleDealerID)$SEP$(i s.SaleOrderID)$SEP$(t s.SaleCustRef)$SEP$(i s.HaulerID)$SEP$(i s.DispatchID)$SEP$(t s.TicketNotes)$SEP$(n dd.Gross)$SEP$(n dd.Tare)$SEP$(n dd.Net)$SEP$(n dd.AdjWT)$SEP$(t dd.AdjReason)$SEP$(n dd.ConfirmedGross)$SEP$(n dd.ConfirmedTare)$SEP$(n dd.ConfirmedGross-dd.ConfirmedTare)$SEP$(i dd.SOID)$SEP$(i s.TrailerTypeInvID)$SEP$(t inv.ItemName)$SEP$(t mt.Description)$SEP$(t pc.ContactName)$SEP$(t pc.Address)$SEP$(t sc.ContactName)$SEP$(i s.DeliverToID)$SEP$(t s.DeliverWTID)$SEP$(i dd.POID)$SEP$(i dd.PurchTicketID)$SEP$(i dd.SalesTicketID)$SEP$(t dd.WTUM)$SEP$(i ivd.InvoiceID)$SEP$(d s.CreatedDate)$SEP$(t s.ReplacementFor)
 FROM scoped s
 OUTER APPLY (SELECT TOP 1 * FROM dbo.BrokerWTDTL d
              WHERE d.BrokerWTID = s.BrokerWTID AND d.CompanyID = s.CompanyID AND d.DTLVoid = 0

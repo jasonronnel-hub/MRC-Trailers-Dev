@@ -6,7 +6,7 @@ import { CommoditySelect } from './SellModal'
 
 const F = (v) => v ?? ''
 
-export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parties, commodityCodes = [], close, onSaved }) {
+export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parties, commodityCodes = [], makes = [], close, onSaved }) {
   const editing = !!unit
   const suppliers = parties.filter((p) => p.group?.name === 'Trailer Supplier')
   const [f, setF] = useState({
@@ -22,6 +22,11 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
       ? titleTypes.find((t) => t.name === unit.title_type.name)?.id ?? ''
       : titleTypes.find((t) => t.name === 'Original')?.id ?? '',
     title_received: unit?.title_received ?? false,
+    title_received_date: F(unit?.title_received_date),
+    model_year: F(unit?.model_year),
+    make_id: unit?.make ? (makes.find((m) => m.name === unit.make.name)?.id ?? '') : '',
+    replacement_for: F(unit?.replacement_for),
+    scheduled_date: F(unit?.scheduled_date), pickup_date: F(unit?.pickup_date), completion_date: F(unit?.completion_date),
     title_sent_date: F(unit?.title_sent_date),
     title_tracking_num: F(unit?.title_tracking_num),
     physical_location: F(unit?.physical_location),
@@ -67,6 +72,11 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
         status_id: f.status_id,
         title_type_id: f.title_type_id || null,
         title_received: f.title_received,
+        title_received_date: f.title_received_date || null,
+        model_year: f.model_year === '' ? null : parseInt(f.model_year, 10),
+        make_id: f.make_id || null,
+        replacement_for: f.replacement_for || null,
+        scheduled_date: f.scheduled_date || null, pickup_date: f.pickup_date || null, completion_date: f.completion_date || null,
         title_sent_date: f.title_sent_date || null,
         title_tracking_num: f.title_tracking_num || null,
         physical_location: f.physical_location || null,
@@ -107,6 +117,17 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
             <input value={f.vin} onChange={set('vin')} className="mono" />
           </div>
           <div className="field">
+            <label>Year</label>
+            <input type="number" min="1950" max="2100" value={f.model_year} onChange={set('model_year')} placeholder="2017" />
+          </div>
+          <div className="field">
+            <label>Make</label>
+            <select value={f.make_id} onChange={set('make_id')}>
+              <option value="">—</option>
+              {makes.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </div>
+          <div className="field">
             <label>Equipment type</label>
             <select value={f.equipment_type_id} onChange={pickEquip}>
               <option value="">—</option>
@@ -135,6 +156,7 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
             <label className="checkline" style={{ marginTop: 4 }}>
               <input type="checkbox" checked={f.title_received} onChange={set('title_received')} /> Title received
             </label>
+            {f.title_received && <input type="date" value={f.title_received_date} onChange={set('title_received_date')} title="Title received date" />}
           </div>
           <div className="field">
             <label>Title/BOS sent (Traci’s FedEx workflow)</label>
@@ -187,6 +209,26 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
             <label>Material (optional)</label>
             <input value={f.material_type} onChange={set('material_type')} placeholder="e.g. Steel – Auto Body" />
             <div className="fieldnote">Free text, used ad-hoc — shows in Kim’s buyer email when set.</div>
+          </div>
+          {editing && (<>
+            <div className="field">
+              <label>Pickup date</label>
+              <input type="date" value={f.pickup_date} onChange={set('pickup_date')} />
+            </div>
+            <div className="field">
+              <label>Scheduled date</label>
+              <input type="date" value={f.scheduled_date} onChange={set('scheduled_date')} />
+            </div>
+            <div className="field">
+              <label>Completed date</label>
+              <input type="date" value={f.completion_date} onChange={set('completion_date')} />
+              <div className="fieldnote">Set automatically by Mark delivered; edit only to correct it.</div>
+            </div>
+          </>)}
+          <div className="field full">
+            <label>Note / replacement for</label>
+            <textarea value={f.replacement_for} onChange={set('replacement_for')} placeholder="Dispatch notes (Kim), or the old unit’s info when this is a replacement" />
+            <div className="fieldnote">Searchable. Shows at the top of the unit and on dispatch screens.</div>
           </div>
           <div className="field full">
             <label>Condition comments</label>

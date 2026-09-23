@@ -22,10 +22,13 @@ export const COLUMNS = {
   sales_order:    { label: 'SO' },
   sale_date:      { label: 'Sale date', sort: 'sold_date' },
   title:          { label: 'Title' },
+  title_rec_date: { label: 'Title rec’d', sort: 'title_received_date' },
   dispatch:       { label: 'Dispatch' },
   dispatch_date:  { label: 'Dispatch date', sort: 'dispatch_date' },
   delivery_eta:   { label: 'Sched. delivery' },
   delivered_date: { label: 'Delivered', sort: 'completion_date' },
+  pickup_date:    { label: 'Pickup date', sort: 'pickup_date' },
+  note:           { label: 'Note' },
   invoice:        { label: 'Invoice' },
 }
 
@@ -34,8 +37,8 @@ export const COLUMNS = {
 export const DEFAULT_COLUMNS = {
   'Purchased Not Ready':            ['bwt', 'unit_number', 'type', 'source', 'location', 'purchase_date', 'status'],
   'Ready — Sales Required':         ['bwt', 'unit_number', 'type', 'source', 'location', 'ready_date', 'status'],
-  'Sold — Dispatch Required':       ['bwt', 'unit_number', 'type', 'location', 'sold_to', 'sales_order', 'sale_date', 'title', 'status'],
-  'Dispatched — Delivery Required': ['bwt', 'unit_number', 'type', 'location', 'sold_to', 'sales_order', 'dispatch', 'dispatch_date', 'delivery_eta', 'status'],
+  'Sold — Dispatch Required':       ['bwt', 'unit_number', 'type', 'location', 'sold_to', 'sales_order', 'sale_date', 'title', 'note', 'status'],
+  'Dispatched — Delivery Required': ['bwt', 'unit_number', 'type', 'location', 'sold_to', 'dispatch', 'dispatch_date', 'pickup_date', 'delivery_eta', 'note', 'status'],
   'Delivered — Invoice Required':   ['bwt', 'unit_number', 'type', 'sold_to', 'sales_order', 'delivered_date', 'invoice', 'status'],
   'Invoiced — Closed':              ['bwt', 'unit_number', 'type', 'sold_to', 'sales_order', 'invoice', 'delivered_date', 'status'],
   'State Unknown':                  ['bwt', 'unit_number', 'type', 'source', 'location', 'status'],

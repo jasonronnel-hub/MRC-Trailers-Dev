@@ -28,7 +28,10 @@ export default function DispatchForm({ dispatch, dispatches, parties, units = []
       if (!needle) return true
       return `${haulerPlace(h)} ${h.billing_address || ''} ${h.state || ''}`.toLowerCase().includes(needle)
     })
-  const buyers = parties.filter((p) => p.group?.name === 'Trailer Buyer')
+  // Destination candidates: buyers, plus whoever the chosen units are sold
+  // to — ROM filed some real buyers under other dealer groups.
+  const soldToIds = new Set(units.map((u) => u.sold_to?.id).filter(Boolean))
+  const buyers = parties.filter((p) => p.group?.name === 'Trailer Buyer' || soldToIds.has(p.id))
 
   // What the chosen units tell us. Mixed buyers or mixed locations are
   // flagged, not silently merged.
@@ -36,7 +39,9 @@ export default function DispatchForm({ dispatch, dispatches, parties, units = []
   const pickups = uniq(units.map((u) => unitLocation(u)))
   const soleBuyer = buyerIds.length === 1 ? buyers.find((b) => b.id === buyerIds[0]) : null
   const solePickup = pickups.length === 1 ? pickups[0] : ''
-  const pickupAddr = uniq(units.map((u) => u.purchase_location_address || u.pickup_address))
+  // Addresses are multi-line in ROM; the form field is one line.
+  const oneLine = (a) => (a || '').split('\n').map((l) => l.trim()).filter(Boolean).join(', ')
+  const pickupAddr = uniq(units.map((u) => oneLine(u.purchase_location_address || u.pickup_address)))
 
   const [f, setF] = useState({
     hauler_party_id: dispatch?.hauler?.id ?? '',
@@ -107,13 +112,20 @@ export default function DispatchForm({ dispatch, dispatches, parties, units = []
         {fromUnits && (
           <div className="est-list">
             {units.map((u) => (
-              <div key={u.id} className="est-row">
+              <div key={u.id} className="est-row" style={{ flexWrap: 'wrap' }}>
                 <span className="ticket">W{u.legacy_bwt_id ?? u.id}</span>
                 <b>{u.unit_number || '—'}</b>
-                <span className="muted">{u.equipment_type?.name || '—'}</span>
+                <span className="muted">{[u.model_year, u.make?.name, u.equipment_type?.name].filter(Boolean).join(' ') || '—'}</span>
                 <span className="muted">{unitLocation(u) || ''}</span>
                 <span className="muted">{u.sold_to?.name || 'no buyer'}</span>
                 <span className="amt"><Pill status={u.status?.name} /></span>
+                {/* Kim's trailer-info line: VIN, title, MIA, note — what she checks before booking a truck */}
+                <div style={{ flexBasis: '100%', fontSize: 12, color: 'var(--ink-soft)', paddingLeft: 4 }}>
+                  {u.vin && <span className="mono">VIN {u.vin}</span>}
+                  <span> · title {u.title_received ? `received${u.title_received_date ? ' ' + u.title_received_date : ''}` : 'NOT received'}{u.title_type?.name ? ` (${u.title_type.name})` : ''}</span>
+                  {u.missing && <span className="warnrow"> · MIA</span>}
+                  {u.replacement_for && <div style={{ color: 'var(--copper-deep)' }}>Note: {u.replacement_for}</div>}
+                </div>
               </div>
             ))}
             {buyerIds.length > 1 && (

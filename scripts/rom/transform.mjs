@@ -298,6 +298,7 @@ const unitRows = stUnits.map((u) => {
     source_party_id: party.get(int(u.purch_dealer_id)) ?? null,
     purchase_order_ref: u.purch_cust_ref || null,
     condition_comments: u.ticket_notes || null,
+    replacement_for: u.replacement_for?.trim() || null,
     ready_date: dateOnly(u.ready_date), scheduled_date: dateOnly(u.sched_date),
     dispatch_date: dateOnly(u.dispatch_date), pickup_date: dateOnly(u.pickup_date),
     completion_date: dateOnly(u.completion_date),

@@ -356,3 +356,9 @@ td.sel input { accent-color: var(--copper); width: 15px; height: 15px; }
 .colmenu { position: absolute; right: 0; top: 34px; z-index: 30; background: #fff; border: 1px solid var(--line);
   border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); padding: 10px 14px; min-width: 200px;
   max-height: 60vh; overflow: auto; font-size: 13px; text-align: left; }
+
+/* Unit drawer: Kim's trailer-info block, two columns when there's room */
+.tinfo { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+.tinfo .kv { grid-template-columns: 112px 1fr; }
+@media (max-width: 900px) { .tinfo { grid-template-columns: 1fr; } }
+.tinfo dd.mono { white-space: nowrap; }

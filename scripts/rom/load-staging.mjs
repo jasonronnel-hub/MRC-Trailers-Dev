@@ -34,6 +34,7 @@ const FILES = {
     'deliver_to_id', 'deliver_wt_ref',
     'po_id', 'purch_ticket_id', 'sales_ticket_id', 'wt_um', 'sale_invoice_id',
     'created_date',
+    'replacement_for',
   ]],
   'invoices.psv': ['staging_invoices', [
     'invoice_id', 'company_id', 'customer_id', 'invoice_date', 'due_date', 'terms',
