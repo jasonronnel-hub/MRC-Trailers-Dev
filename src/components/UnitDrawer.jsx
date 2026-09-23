@@ -15,10 +15,15 @@ function StatusHistory({ unitId, statuses }) {
     <div style={{ marginTop: 16 }}>
       <b>Status history</b>
       {log.map((l) => (
-        <div key={l.id} style={{ borderTop: '1px solid var(--line)', padding: '6px 0', fontSize: 12.5 }}>
-          {l.from_status ? <>{name(l.from_status)} → </> : ''}<b>{name(l.to_status)}</b>
-          {l.context && <span className="muted"> · {l.context}</span>}
-          <span className="muted" style={{ float: 'right' }}>
+        <div key={l.id} style={{
+          borderTop: '1px solid var(--line)', padding: '6px 0', fontSize: 12.5,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10,
+        }}>
+          <span>
+            {l.from_status ? <>{name(l.from_status)} → </> : ''}<b>{name(l.to_status)}</b>
+            {l.context && <span className="muted"> · {l.context}</span>}
+          </span>
+          <span className="muted" style={{ flex: 'none', whiteSpace: 'nowrap' }}>
             {l.changed_at ? new Date(l.changed_at).toLocaleDateString() : ''}
           </span>
         </div>
