@@ -218,12 +218,12 @@ export default function SellModal({ units, data, close, onSaved, refresh }) {
               </div>
               {overdue && (
                 <div className="banner" style={{ marginTop: 8, marginBottom: 0, background: 'var(--error-tint)', borderColor: 'rgba(179,64,47,0.35)', borderLeftColor: 'var(--error)' }}>
-                  <b>{buyer.name} is overdue:</b> {overdue.count} open invoice{overdue.count === 1 ? '' : 's'}, {money(overdue.amount)}, oldest {overdue.oldest} days past due. Warning only — you can proceed.
+                  <b>{buyer.name} is overdue:</b> {overdue.count} open invoice{overdue.count === 1 ? '' : 's'}, {money(overdue.amount)}, oldest {overdue.oldest} days past due.
                 </div>
               )}
               {!buyer.destruction_agreement_signed && (
                 <div className="banner" style={{ marginTop: 8, marginBottom: 0, background: 'var(--error-tint)', borderColor: 'rgba(179,64,47,0.35)', borderLeftColor: 'var(--error)' }}>
-                  <b>No destruction agreement on file.</b> Do not ship FedEx/Walmart units until it’s signed. Warning only — you can proceed.
+                  <b>No destruction agreement on file.</b> Do not ship FedEx/Walmart units until it’s signed.
                 </div>
               )}
             </div>

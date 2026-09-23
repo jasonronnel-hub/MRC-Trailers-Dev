@@ -49,11 +49,8 @@ export default function DispatchForm({ dispatch, dispatches, parties, units = []
     pickup_location: F(dispatch?.pickup_location) || solePickup,
     pickup_address: F(dispatch?.pickup_address) || (pickupAddr.length === 1 ? pickupAddr[0] : ''),
     destination_party_id: dispatch?.destination?.id ?? soleBuyer?.id ?? '',
-    destination_address: F(dispatch?.destination_address),
+    destination_address: F(dispatch?.destination_address) || (soleBuyer ? oneLine(soleBuyer.billing_address) : ''),
     scheduled_pickup: F(dispatch?.scheduled_pickup),
-    delivery_eta: F(dispatch?.delivery_eta),
-    rate: F(dispatch?.rate),
-    rate_basis: dispatch?.rate_basis ?? 'flat',
     notes: F(dispatch?.notes),
     cancelled: dispatch?.cancelled ?? false,
     existing_dispatch_id: '',
@@ -80,8 +77,6 @@ export default function DispatchForm({ dispatch, dispatches, parties, units = []
         hauler_party_id: f.hauler_party_id || null,
         destination_party_id: f.destination_party_id || null,
         scheduled_pickup: f.scheduled_pickup || null,
-        delivery_eta: f.delivery_eta || null,
-        rate: f.rate === '' ? null : Number(f.rate),
       }
       if (fromUnits) {
         const r = await dispatchUnits({
@@ -143,7 +138,7 @@ export default function DispatchForm({ dispatch, dispatches, parties, units = []
             {destination.billing_address && <span className="muted"> · {destination.billing_address.split('\n').pop()}</span>}
             {destination.title_required_with_delivery && <div className="warnrow" style={{ fontSize: 12.5, marginTop: 2 }}>Title must travel with the delivery.</div>}
             {destination.trucking_notes && <div style={{ fontSize: 12.5, marginTop: 2 }}><b>Kim’s notes:</b> {destination.trucking_notes}</div>}
-            {!destination.destruction_agreement_signed && <div className="warnrow" style={{ fontSize: 12.5, marginTop: 2 }}>No destruction agreement on file. Warning only.</div>}
+            {!destination.destruction_agreement_signed && <div className="warnrow" style={{ fontSize: 12.5, marginTop: 2 }}>No destruction agreement on file.</div>}
           </div>
         )}
 
@@ -196,31 +191,18 @@ export default function DispatchForm({ dispatch, dispatches, parties, units = []
             <SearchSelect placeholder="Type to find the yard…" style={{ width: '100%' }}
               options={buyers.map((b) => ({ id: b.id, label: b.name }))}
               value={f.destination_party_id}
-              onChange={(v) => setF({ ...f, destination_party_id: v, existing_dispatch_id: '' })} />
+              onChange={(v) => {
+                const picked = buyers.find((b) => String(b.id) === String(v))
+                setF({ ...f, destination_party_id: v, existing_dispatch_id: '', destination_address: picked ? oneLine(picked.billing_address) : '' })
+              }} />
           </div>
           <div className="field">
             <label>Destination address</label>
-            <input value={f.destination_address} onChange={set('destination_address')} placeholder="defaults to the yard’s billing address" />
+            <input value={f.destination_address} onChange={set('destination_address')} placeholder="from the yard’s billing address" />
           </div>
           <div className="field">
             <label>Scheduled pickup</label>
             <input type="date" value={f.scheduled_pickup} onChange={set('scheduled_pickup')} />
-          </div>
-          <div className="field">
-            <label>Delivery ETA</label>
-            <input type="date" value={f.delivery_eta} onChange={set('delivery_eta')} />
-          </div>
-          <div className="field">
-            <label>Rate ($)</label>
-            <input type="number" step="any" min="0" value={f.rate} onChange={set('rate')} />
-          </div>
-          <div className="field">
-            <label>Rate basis</label>
-            <select value={f.rate_basis} onChange={set('rate_basis')}>
-              <option value="flat">flat</option>
-              <option value="per_unit">per unit</option>
-              <option value="per_mile">per mile</option>
-            </select>
           </div>
           <div className="field full">
             <label>Notes (Kim’s field)</label>

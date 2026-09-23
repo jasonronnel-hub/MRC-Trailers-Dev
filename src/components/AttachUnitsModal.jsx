@@ -77,7 +77,7 @@ export default function AttachUnitsModal({ order, statuses, invoices = [], close
       {order.buyer && !order.buyer.destruction_agreement_signed && (
         <div className="banner" style={{ background: 'var(--error-tint)', borderColor: 'rgba(179,64,47,0.35)', borderLeftColor: 'var(--error)' }}>
           <b>⚑ {order.buyer.name} has NO destruction agreement on file.</b> Do not ship
-          FedEx/Walmart units until it’s signed. (Warning only — you can proceed; Jason’s call.)
+          FedEx/Walmart units until it’s signed.
         </div>
       )}
       {err && <div className="auth-err">{err}</div>}
