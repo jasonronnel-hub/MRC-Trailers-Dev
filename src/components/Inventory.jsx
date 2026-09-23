@@ -5,6 +5,7 @@ import UnitForm from './UnitForm'
 import WeightsModal from './WeightsModal'
 import ImportModal from './ImportModal'
 import SellModal from './SellModal'
+import DispatchForm from './DispatchForm'
 import SearchSelect from './SearchSelect'
 import { can, fetchUnitsPage, unitLocation } from '../lib/api'
 import { COLUMNS, loadColumns, saveColumns, resetColumns } from '../lib/columns'
@@ -50,6 +51,7 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
   const [notice, setNotice] = useState('')
   const [selected, setSelected] = useState(new Map())   // id -> unit; survives paging/search
   const [selling, setSelling] = useState(null)          // array of units for the Sell modal
+  const [dispatching, setDispatching] = useState(null)  // array of units for the Dispatch form
   const [reload, setReload] = useState(0)               // bump to refetch the current page
   const [colMenu, setColMenu] = useState(false)
 
@@ -136,8 +138,20 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
   const saved = () => { setFormUnit(null); setDrawerUnit(null); refresh(); setReload((n) => n + 1) }
   // A unit can be sold if nothing has claimed it yet: no SO, not closed, not voided.
   const sellable = (u) => !u.sales_order && u.status?.name !== 'Invoiced — Closed' && !u.voided
+  // Sold and not yet on a hauling ticket: Kim's queue.
+  const dispatchable = (u) => u.status?.name === 'Sold — Dispatch Required' && !u.dispatch && !u.voided
   const toggle = (u) => setSelected((m) => { const n = new Map(m); n.has(u.id) ? n.delete(u.id) : n.set(u.id, u); return n })
   const canSell = can(role, 'createOrder')
+  const canDispatch = can(role, 'createDispatch')
+  const selectable = (u) => (canSell && sellable(u)) || (canDispatch && dispatchable(u))
+  const sel = [...selected.values()]
+  const allSellable = sel.length > 0 && sel.every(sellable)
+  const allDispatchable = sel.length > 0 && sel.every(dispatchable)
+  const dispatched = ({ dispatchNumber, haulerName, count }) => {
+    setDispatching(null); setSelected(new Map()); setDrawerUnit(null); refresh(); setReload((n) => n + 1)
+    setNotice(`Dispatched ${count} unit${count === 1 ? '' : 's'} on ${dispatchNumber}${haulerName ? ` with ${haulerName}` : ''} — now Dispatched — Delivery Required.`)
+    setView('active'); setStatusFilter(sid('Dispatched — Delivery Required')); setPage(0)
+  }
   const sold = ({ orderNumber, buyerName, count }) => {
     setSelling(null); setSelected(new Map()); setDrawerUnit(null); refresh(); setReload((n) => n + 1)
     setNotice(`Sold ${count} unit${count === 1 ? '' : 's'} to ${buyerName} on ${orderNumber} — now Sold — Dispatch Required.`)
@@ -261,12 +275,16 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
         </div>
       )}
 
-      {canSell && selected.size > 0 && (
+      {selected.size > 0 && (
         <div className="selbar">
           <b>{selected.size} selected</b>
-          <span className="names">{[...selected.values()].slice(0, 8).map((u) => u.unit_number || `W${u.legacy_bwt_id ?? u.id}`).join(', ')}{selected.size > 8 ? ', …' : ''}</span>
-          <button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => setSelling([...selected.values()])}>Sell {selected.size} unit{selected.size === 1 ? '' : 's'}…</button>
-          <button className="btn ghost sm" onClick={() => setSelected(new Map())}>Clear</button>
+          <span className="names">{sel.slice(0, 8).map((u) => u.unit_number || `W${u.legacy_bwt_id ?? u.id}`).join(', ')}{selected.size > 8 ? ', …' : ''}</span>
+          <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+            {canSell && allSellable && <button className="btn sm" onClick={() => setSelling(sel)}>Sell {selected.size} unit{selected.size === 1 ? '' : 's'}…</button>}
+            {canDispatch && allDispatchable && <button className="btn sm" onClick={() => setDispatching(sel)}>Dispatch {selected.size} unit{selected.size === 1 ? '' : 's'}…</button>}
+            {!allSellable && !allDispatchable && <span className="muted" style={{ fontSize: 12.5 }}>Mixed selection — pick units that are all unsold, or all sold and awaiting dispatch.</span>}
+            <button className="btn ghost sm" onClick={() => setSelected(new Map())}>Clear</button>
+          </span>
         </div>
       )}
 
@@ -275,7 +293,7 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
           <table>
             <thead>
               <tr>
-                {canSell && <th className="sel"></th>}
+                {(canSell || canDispatch) && <th className="sel"></th>}
                 {cols.map((key) => COLUMNS[key].sort ? sortHeader(COLUMNS[key].label, COLUMNS[key].sort) : <th key={key}>{COLUMNS[key].label}</th>)}
                 {view === 'attention' && !statusFilter && <th>Why</th>}
               </tr>
@@ -283,10 +301,10 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
             <tbody>
               {result.rows.map((u) => (
                 <tr key={u.id} onClick={() => setDrawerUnit(u)}>
-                  {canSell && (
+                  {(canSell || canDispatch) && (
                     <td className="sel" onClick={(e) => e.stopPropagation()}>
-                      <input type="checkbox" disabled={!sellable(u)} checked={selected.has(u.id)} onChange={() => toggle(u)}
-                        title={sellable(u) ? 'Select to sell' : 'Already on a sales order or closed'} />
+                      <input type="checkbox" disabled={!selectable(u)} checked={selected.has(u.id)} onChange={() => toggle(u)}
+                        title={sellable(u) ? 'Select to sell' : dispatchable(u) ? 'Select to dispatch' : 'Nothing to do from here'} />
                     </td>
                   )}
                   {cols.map((key) => <td key={key}>{cell(key, u)}</td>)}
@@ -318,7 +336,11 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
         <UnitDrawer unit={drawerUnit} statuses={statuses} role={role} close={() => setDrawerUnit(null)}
           onEdit={can(role, 'editUnit') ? () => setFormUnit(drawerUnit) : null}
           onWeights={can(role, 'editUnit') ? () => setWeightsUnit(drawerUnit) : null}
-          onSell={canSell && sellable(drawerUnit) ? () => setSelling([drawerUnit]) : null} />
+          onSell={canSell && sellable(drawerUnit) ? () => setSelling([drawerUnit]) : null}
+          onDispatch={canDispatch && dispatchable(drawerUnit) ? () => setDispatching([drawerUnit]) : null} />
+      )}
+      {dispatching && (
+        <DispatchForm units={dispatching} dispatches={data.dispatches} parties={parties} close={() => setDispatching(null)} onSaved={dispatched} />
       )}
       {selling && (
         <SellModal units={selling} data={data} refresh={refresh} close={() => setSelling(null)} onSaved={sold} />

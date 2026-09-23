@@ -524,10 +524,26 @@ export const nextDispatchNumber = (dispatches) => {
 
 export async function saveDispatch(fields, id) {
   const q = id
-    ? supabase.from('dispatches').update(fields).eq('id', id)
-    : supabase.from('dispatches').insert(fields)
-  const { error } = await q
+    ? supabase.from('dispatches').update(fields).eq('id', id).select('id, dispatch_number').single()
+    : supabase.from('dispatches').insert(fields).select('id, dispatch_number').single()
+  const { data, error } = await q
   if (error) throw error
+  return data
+}
+
+// One-step dispatch (Kim's real flow, mirroring sellUnits): create the
+// hauling ticket — or add to an existing one for the same destination — and
+// assign an EXPLICIT list of units in the same action. The assign trigger
+// sets hauler, dispatch_date, status, and the audit row.
+export async function dispatchUnits({ dispatch, dispatchId, unitIds }) {
+  let id = dispatchId
+  let dispatch_number = null
+  if (!id) {
+    const d = await saveDispatch(dispatch)
+    id = d.id; dispatch_number = d.dispatch_number
+  }
+  await assignUnitsToDispatch(id, unitIds)
+  return { id, dispatch_number }
 }
 
 // Assign an EXPLICIT list of unit ids to a dispatch. The DB trigger fills
