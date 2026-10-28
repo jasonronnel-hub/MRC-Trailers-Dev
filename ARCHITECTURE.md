@@ -126,6 +126,12 @@ and TrailerTypeInvID; ROM's free-text item lands in `detail_notes`.
 `units.purchase_date` = BrokerWTHDR.CreatedDate; `sold_date` = the order's date
 (in-app: set by the attach trigger).
 
+**Who creates accounts** (Jason, Oct 28): office, sales and admin can create
+parties (migration 20260825100032 — was office/admin, the old "only Janet
+creates accounts" rule). Banking stays accounting/admin. Janet used to be the
+duplicate check, so the new-account form warns about similar existing names
+(soft warning, never blocks).
+
 **Ready step is per supplier** (TJ, Oct 28). "Purchased Not Ready" exists for
 FedEx Ground's de-identification process; every other fleet's units are ours to
 sell the moment the bill of sale is paid. `parties.ready_step_required`

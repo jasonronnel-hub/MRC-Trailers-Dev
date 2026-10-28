@@ -621,7 +621,7 @@ export async function markUnitsDelivered(unitIds, deliveredStatusId) {
 // Role → capability map, mirroring the Section 3 RLS policies. The database
 // enforces this regardless; the UI just avoids offering doomed actions.
 const CAN = {
-  createParty: ['office', 'admin'],
+  createParty: ['office', 'sales', 'admin'],
   editParty: ['office', 'admin', 'sales'],
   createOrder: ['sales', 'admin'],
   editOrder: ['sales', 'admin', 'accounting'],

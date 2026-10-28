@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Modal from './Modal'
 import SearchSelect from './SearchSelect'
 import { saveParty, saveContact, saveDeduction, deleteDeduction } from '../lib/api'
+import { supabase } from '../lib/supabase'
 import DeductionsEditor from './DeductionsEditor'
 
 const F = (v) => v ?? ''
@@ -52,6 +53,23 @@ export default function PartyForm({ party, groups, paymentTerms, close, onSaved 
   const [busy, setBusy] = useState(false)
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })
 
+  // New accounts: warn (never block) about similar existing names — Janet used
+  // to be the duplicate check when only she could create accounts.
+  const [similar, setSimilar] = useState([])
+  useEffect(() => {
+    if (editing) return
+    const words = f.name.trim().replace(/[%,()*]/g, ' ').split(/\s+/).filter((w) => w.length > 2)
+    if (f.name.trim().length < 4 || !words.length) { setSimilar([]); return }
+    let cancelled = false
+    const t = setTimeout(async () => {
+      // The first two significant words, in order, anywhere in the name.
+      const pattern = `%${words.slice(0, 2).join('%')}%`
+      const { data } = await supabase.from('parties').select('id, name, city, state, group:party_groups(name)').ilike('name', pattern).eq('active', true).limit(6)
+      if (!cancelled) setSimilar(data || [])
+    }, 350)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [f.name, editing])   // eslint-disable-line react-hooks/exhaustive-deps
+
   const submit = async (e) => {
     e.preventDefault()
     setBusy(true); setErr('')
@@ -91,6 +109,12 @@ export default function PartyForm({ party, groups, paymentTerms, close, onSaved 
           <div className="field full">
             <label>Company name *</label>
             <input value={f.name} onChange={set('name')} required autoFocus />
+            {similar.length > 0 && (
+              <div className="banner" style={{ marginTop: 6, marginBottom: 0 }}>
+                <b>Already in the system?</b> {similar.map((p) => `${p.name}${p.city ? ` (${p.city}${p.state ? ', ' + p.state : ''})` : ''}${p.group?.name ? ` · ${p.group.name}` : ''}`).join(' · ')}
+                <div style={{ fontSize: 12.5 }}>Check these before creating a duplicate. You can still save.</div>
+              </div>
+            )}
           </div>
           <div className="field">
             <label>Group</label>
