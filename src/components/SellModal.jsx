@@ -4,7 +4,7 @@ import SearchSelect from './SearchSelect'
 import PartyForm from './PartyForm'
 import Pill from './Pill'
 import DeductionsEditor, { deductionLabel } from './DeductionsEditor'
-import { sellUnits, nextOrderNumber, priceEquivalents, LB_PER, formatPrice, DEDUCTION_LABELS, unitLocation } from '../lib/api'
+import { can, sellUnits, nextOrderNumber, priceEquivalents, LB_PER, formatPrice, DEDUCTION_LABELS, unitLocation } from '../lib/api'
 import { buyerOverdue, money } from '../lib/ar'
 
 // One-step sale. TJ's ROM flow was: create the buyer (via Janet), create the
@@ -84,7 +84,8 @@ export function CommoditySelect({ value, onChange, commodityCodes = [], autoFocu
   )
 }
 
-export default function SellModal({ units, data, close, onSaved, refresh }) {
+export default function SellModal({ units, data, role, close, onSaved, refresh }) {
+  const canCreateBuyer = can(role, 'createParty')
   const { parties, orders, groups, paymentTerms = [], commodityCodes = [], invoices = [] } = data
   const buyers = parties.filter((p) => p.group?.name === 'Trailer Buyer')
   const first = units[0]
@@ -202,8 +203,9 @@ export default function SellModal({ units, data, close, onSaved, refresh }) {
                 }))}
                 value={f.buyer_party_id}
                 onChange={(v) => setF({ ...f, buyer_party_id: v, existing_order_id: '' })} />
-              <button type="button" className="btn ghost sm" onClick={() => setNewBuyer(true)}>+ New buyer</button>
+              {canCreateBuyer && <button type="button" className="btn ghost sm" onClick={() => setNewBuyer(true)}>+ New buyer</button>}
             </div>
+            {!canCreateBuyer && <div className="fieldnote">Not in the list? New accounts are created by Janet — send her the name, address and contact, then come back and pick the buyer here.</div>}
           </div>
 
           {buyer && (

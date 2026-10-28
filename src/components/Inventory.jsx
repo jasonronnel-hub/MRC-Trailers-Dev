@@ -414,7 +414,7 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
         <DispatchForm units={dispatching} dispatches={data.dispatches} parties={parties} close={() => setDispatching(null)} onSaved={dispatched} />
       )}
       {selling && (
-        <SellModal units={selling} data={data} refresh={refresh} close={() => setSelling(null)} onSaved={sold} />
+        <SellModal units={selling} data={data} role={role} refresh={refresh} close={() => setSelling(null)} onSaved={sold} />
       )}
       {weightsUnit && (
         <WeightsModal unit={weightsUnit}
