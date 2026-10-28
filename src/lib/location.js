@@ -63,8 +63,17 @@ export function shortLocation(name, address) {
   // a trailing "Canada" line. Tolerates a lowercase state ("Denver, Co"), a
   // missing comma ("Beaumont TX 77726"), and a spelled-out province.
   const lines = (address || '').split('\n').map((l) => l.trim()).filter(Boolean)
+  // A single-line address ("2155 Usa Pkwy, Sparks, NV 89437" — how spreadsheets
+  // carry them) is tried whole, then as its last two comma segments.
+  const candidates = []
   for (let i = lines.length - 1; i >= 0; i--) {
-    const line = lines[i].replace(/\b(canada|usa)$/i, '').trim()
+    const whole = lines[i].replace(/\b(canada|usa)$/i, '').trim()
+    const parts = whole.split(',').map((p) => p.trim()).filter(Boolean)
+    if (parts.length > 2) candidates.push(parts.slice(-2).join(', '))
+    candidates.push(whole)
+    if (parts.length === 2) candidates.push(parts[1])
+  }
+  for (const line of candidates) {
     let m = line.match(/^(.+?)[\s,]+([A-Za-z]{2})\.?(?:\s+[A-Za-z0-9][A-Za-z0-9 -]*)?$/)
     if (m && !/\d/.test(m[1]) && !/\b(po box|unit|suite|ste|c\/o)\b/i.test(m[1])) return `${titleCity(m[1])}, ${m[2].toUpperCase()}`
     m = line.match(/^(.+?)[\s,]+(ontario|quebec|qu[ée]bec|alberta|british columbia|manitoba|saskatchewan|nova scotia|new brunswick)\b/i)

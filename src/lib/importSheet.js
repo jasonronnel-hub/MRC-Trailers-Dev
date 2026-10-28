@@ -86,6 +86,16 @@ export function applyMapping(rows, mapping) {
   }).filter((u) => u.unit_number || u.vin)
 }
 
+// A date in the rows above the header (Walmart: "September Scrap Bid … 9/25/26")
+// is the purchase date for the batch. ISO or null.
+export function sheetDate(rows, headerIdx) {
+  for (const r of rows.slice(0, headerIdx)) for (const c of r) {
+    const m = String(c).match(/\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/)
+    if (m) { const y = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]); return `${y}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}` }
+  }
+  return null
+}
+
 // Normalized headers joined — the same supplier's sheet next month matches.
 export const headerSignature = (headers) => headers.map((h) => norm(h)).filter(Boolean).join('|')
 

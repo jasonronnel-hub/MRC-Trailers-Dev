@@ -6,6 +6,8 @@ import { FIELDS, parseText, parseFile, findHeaderRow, autoMap, applyMapping, new
 import { supabase } from '../lib/supabase'
 import { fetchImportProfiles, saveImportProfile } from '../lib/api'
 import { shortLocation } from '../lib/location'
+import { decodeVin, COMMODITY_BY_LENGTH } from '../lib/vin'
+import { sheetDate } from '../lib/importSheet'
 
 // Bulk purchase intake (Jason's list, Sept 2026). Three steps:
 //   1. load — paste from Excel, or pick a .csv/.xlsx file
@@ -15,7 +17,7 @@ import { shortLocation } from '../lib/location'
 //      Purchased Not Ready tagged with one batch id. Rows still missing
 //      data show up in Needs attention as "needs backfill".
 // Review the real supplier files with Catherine before cutover.
-export default function ImportModal({ parties, equipTypes, commodityCodes = [], close, onSaved }) {
+export default function ImportModal({ parties, equipTypes, commodityCodes = [], makes = [], close, onSaved }) {
   const suppliers = parties.filter((p) => p.group?.name === 'Trailer Supplier')
   const [paste, setPaste] = useState('')
   const [fileName, setFileName] = useState('')
@@ -39,6 +41,25 @@ export default function ImportModal({ parties, equipTypes, commodityCodes = [], 
   useEffect(() => { fetchImportProfiles().then(setProfiles).catch(() => setProfiles([])) }, [])
 
   const headers = grid ? grid[headerIdx] || [] : []
+  // Sites (stations / DCs) under the chosen fleet. A sheet's "Pickup Location"
+  // is usually the site NUMBER (Walmart DC 6009 = "Walmart - Mt Pleasant IA -
+  // 6009"); sometimes a name. Resolve to the site record so the unit links
+  // to it and the pickup address comes from there.
+  const sourceSites = (parties.find((p) => String(p.id) === String(sourceId))?.contacts || []).filter((c) => c.active !== false)
+  const siteCode = (name) => (name.match(/-\s*(\d{3,5})\s*$/) || [])[1]
+  const resolveSite = (loc, addr) => {
+    const l = String(loc || '').trim(); if (!l) return null
+    let hits = /^\d{3,5}$/.test(l) ? sourceSites.filter((c) => siteCode(c.name) === l) : sourceSites.filter((c) => c.name.toLowerCase().includes(l.toLowerCase()))
+    // Two sites can share a code (Walmart 7048 = McCarran NV and Sparks NV).
+    // Prefer the one whose NAME carries the sheet's city, then its address.
+    if (hits.length > 1 && addr) {
+      const city = (shortLocation(null, addr) || '').split(',')[0].toLowerCase()
+      const byName = hits.filter((c) => c.name.toLowerCase().includes(city))
+      const byAddr = hits.filter((c) => (shortLocation(null, c.address) || '').toLowerCase().includes(city))
+      hits = byName.length ? byName : byAddr.length ? byAddr : hits
+    }
+    return hits[0] || null
+  }
   const codes = useMemo(() => new Set(commodityCodes.map((c) => c.code)), [commodityCodes])
   const typeByText = (t) => {
     if (!t) return null
@@ -50,14 +71,19 @@ export default function ImportModal({ parties, equipTypes, commodityCodes = [], 
     if (!grid) return []
     return applyMapping(grid.slice(headerIdx + 1), mapping).map((r) => {
       const issues = []
+      const site = resolveSite(r.location, r.address)
+      const decoded = decodeVin(r.vin)
+      const derivedCommodity = !r.commodity_code && decoded.lengthFt ? COMMODITY_BY_LENGTH[decoded.lengthFt] || null : null
       if (!r.unit_number && !r.vin) issues.push('no identifier')
+      if (r.vin && !decoded.valid) issues.push('VIN not 17 chars')
       if (r.purchase_price == null) issues.push('no price')
       if (!r.location && !r.address) issues.push('no location')
+      else if (r.location && !site && sourceId) issues.push(`no site for "${r.location}" under this fleet`)
       if (r.commodity_code && !codes.has(r.commodity_code)) issues.push(`unknown commodity ${r.commodity_code}`)
       if (r.type && !typeByText(r.type)) issues.push(`unknown type "${r.type}"`)
-      return { ...r, issues }
+      return { ...r, issues, site, decoded, derivedCommodity }
     })
-  }, [grid, headerIdx, mapping, codes])   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [grid, headerIdx, mapping, codes, sourceId])   // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDupe = (row, ex = existing) =>
     (row.vin && ex.vins.has(row.vin.toLowerCase())) ||
@@ -72,11 +98,15 @@ export default function ImportModal({ parties, equipTypes, commodityCodes = [], 
       const numList = parsed.map((r) => r.unit_number).filter(Boolean)
       const [byVin, byNum] = await Promise.all([
         vinList.length ? supabase.from('units').select('vin').in('vin', vinList) : { data: [] },
-        numList.length ? supabase.from('units').select('unit_number').in('unit_number', numList) : { data: [] },
+        numList.length ? supabase.from('units').select('unit_number, source_party_id').in('unit_number', numList) : { data: [] },
       ])
+      // A VIN is a trailer. A unit number is only a trailer within one fleet
+      // (Walmart 55556 and FedEx 55556 are different trailers), so a number
+      // match counts only against the same source — or any source when none
+      // is chosen yet.
       const ex = {
         vins: new Set((byVin.data || []).map((u) => u.vin?.toLowerCase()).filter(Boolean)),
-        nums: new Set((byNum.data || []).map((u) => u.unit_number?.toLowerCase()).filter(Boolean)),
+        nums: new Set((byNum.data || []).filter((u) => !sourceId || String(u.source_party_id) === String(sourceId)).map((u) => u.unit_number?.toLowerCase()).filter(Boolean)),
       }
       if (cancelled) return
       setExisting(ex)
@@ -84,7 +114,7 @@ export default function ImportModal({ parties, equipTypes, commodityCodes = [], 
     }
     run().catch((e) => setErr(e.message))
     return () => { cancelled = true }
-  }, [parsed])   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [parsed, sourceId])   // eslint-disable-line react-hooks/exhaustive-deps
 
   const applyProfile = (p) => {
     setMatched(p); setMapping(p.mapping || {}); setRemember(false); setProfileName(p.name)
@@ -116,19 +146,27 @@ export default function ImportModal({ parties, equipTypes, commodityCodes = [], 
     setBusy(true); setErr('')
     const batch = newBatchId()
     const defaultType = equipTypes.find((t) => String(t.id) === String(equipId))
+    const vanType = equipTypes.find((t) => t.name === 'Long Straight Rail')
+    const purchaseDate = sheetDate(grid, headerIdx)
+    const makeId = (name) => makes.find((m) => m.name === name)?.id ?? null
     const rows = [...selected].map((i) => {
       const r = parsed[i]
-      const type = typeByText(r.type) || defaultType || null
+      // A decoded 48'/53' van with no type on the sheet is a straight rail.
+      const type = typeByText(r.type) || (!r.type && [48, 53, 45].includes(r.decoded.lengthFt) ? vanType : null) || defaultType || null
       return {
         unit_number: r.unit_number || null,
         vin: r.vin || null,
-        // Same City, ST reduction the migration applies to ROM station names.
-        physical_location: shortLocation(r.location, r.address) || r.location || null,
-        pickup_address: r.address || null,
+        purchase_contact_id: r.site?.id ?? null,
+        // Same City, ST reduction the migration applies to ROM station names;
+        // the site record wins when the sheet only had a code.
+        physical_location: (r.site ? shortLocation(r.site.name, r.site.address) : null) || shortLocation(r.location, r.address) || r.location || null,
+        pickup_address: r.address || r.site?.address || null,
+        make_id: makeId(r.decoded.make),
+        purchase_date: purchaseDate || undefined,
         purchase_price: r.purchase_price,
         purchase_rate: r.purchase_rate,
         purchase_rate_unit: r.purchase_rate != null ? rateUnit : null,
-        commodity_code: codes.has(r.commodity_code) ? r.commodity_code : (commodityDefault || null),
+        commodity_code: codes.has(r.commodity_code) ? r.commodity_code : (r.derivedCommodity || commodityDefault || null),
         purchase_order_ref: r.purchase_order_ref || null,
         model_year: r.model_year,
         condition_comments: r.condition_comments || null,
@@ -242,8 +280,9 @@ export default function ImportModal({ parties, equipTypes, commodityCodes = [], 
                 <input type="checkbox" checked={selected.has(i)} onChange={() => toggle(i)} />
                 <b>{r.unit_number || '—'}</b>
                 <span className="mono muted" style={{ fontSize: 11.5 }}>{r.vin || 'no VIN'}</span>
-                <span className="muted">{r.location || r.address || ''}</span>
-                {r.commodity_code && <span className="mono muted" style={{ fontSize: 11.5 }}>{r.commodity_code}</span>}
+                <span className="muted">{r.site ? r.site.name : (r.location || r.address || '')}</span>
+                {(r.decoded.lengthFt || r.decoded.make) && <span className="tag" style={{ fontSize: 11 }}>{[r.decoded.lengthFt && `${r.decoded.lengthFt}'`, r.decoded.make].filter(Boolean).join(' ')}</span>}
+                {(r.commodity_code || r.derivedCommodity) && <span className="mono muted" style={{ fontSize: 11.5 }}>{r.commodity_code || r.derivedCommodity}</span>}
                 <span style={{ marginLeft: 'auto' }}>{r.purchase_price != null ? `$${r.purchase_price.toLocaleString()}` : '—'}</span>
                 {isDupe(r) && <span className="tag" style={{ color: 'var(--error)', borderColor: 'var(--error)' }}>already in system</span>}
                 {r.issues.map((x) => <span key={x} className="tag" style={{ color: 'var(--copper-deep)', borderColor: 'var(--copper)' }}>{x}</span>)}
@@ -256,6 +295,9 @@ export default function ImportModal({ parties, equipTypes, commodityCodes = [], 
             <input value={profileName} onChange={(e) => setProfileName(e.target.value)} disabled={!remember}
               placeholder={suppliers.find((x) => String(x.id) === String(sourceId))?.name ? `${suppliers.find((x) => String(x.id) === String(sourceId)).name} spreadsheet` : 'e.g. Walmart monthly list'} />
           </div>
+          <p className="muted" style={{ fontSize: 12.5 }}>
+            {parsed.filter((r) => r.site).length} of {parsed.length} rows resolved to a site under {suppliers.find((x) => String(x.id) === String(sourceId))?.name || 'the fleet'} · {parsed.filter((r) => r.decoded.lengthFt).length} sized from the VIN{sheetDate(grid, headerIdx) ? ` · purchase date ${sheetDate(grid, headerIdx)} from the sheet` : ''}.
+          </p>
           <p className="muted" style={{ fontSize: 12.5 }}>
             {selected.size} of {parsed.length} rows selected — imported as <b>Purchased Not Ready</b> under one batch id.
             {issueCount > 0 && <> <b>{issueCount}</b> still missing data; they import anyway and appear in <b>Needs attention</b> until filled in.</>}

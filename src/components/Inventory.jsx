@@ -208,8 +208,8 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
   }
   const pages = Math.max(1, Math.ceil(result.count / PAGE_SIZE))
 
-  const sortHeader = (label, col) => (
-    <th key={col} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+  const sortHeader = (label, col, key = col) => (
+    <th key={key} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
       onClick={() => { setSort((s) => ({ col, dir: s.col === col && s.dir === 'asc' ? 'desc' : 'asc' })); setPage(0) }}>
       {label}{sort.col === col ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
     </th>
@@ -359,7 +359,7 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
             <thead>
               <tr>
                 {anySelectable && <th className="sel"></th>}
-                {cols.map((key) => COLUMNS[key].sort ? sortHeader(COLUMNS[key].label, COLUMNS[key].sort) : <th key={key}>{COLUMNS[key].label}</th>)}
+                {cols.map((key) => COLUMNS[key].sort ? sortHeader(COLUMNS[key].label, COLUMNS[key].sort, key) : <th key={key}>{COLUMNS[key].label}</th>)}
                 {view === 'attention' && !statusFilter && <th>Why</th>}
               </tr>
             </thead>
@@ -427,7 +427,7 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
           close={() => setFormUnit(null)} onSaved={saved} />
       )}
       {importing && (
-        <ImportModal parties={parties} equipTypes={equipTypes} commodityCodes={data.commodityCodes}
+        <ImportModal parties={parties} equipTypes={equipTypes} commodityCodes={data.commodityCodes} makes={data.makes}
           close={() => setImporting(false)}
           onSaved={({ count, batch, backfill }) => {
             setImporting(false)
