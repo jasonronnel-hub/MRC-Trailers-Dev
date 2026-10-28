@@ -19,6 +19,7 @@ export const UNIT_SELECT = `
   purchase_date, ready_date, sold_date, dispatch_date, completion_date, commodity_code, import_batch,
   purchase_order_ref, purchase_rate, purchase_rate_unit,
   scheduled_date, pickup_date, title_received_date, replacement_for,
+  doc_scale_ticket, doc_hauler_invoice, doc_release,
   make:trailer_makes ( name ),
   purchase_site:party_contacts!units_purchase_contact_id_fkey ( id, name, address ),
   status:unit_statuses ( id, name, sort_order ),
@@ -70,7 +71,7 @@ export async function fetchAll() {
       purchase_hot_notes, report_recipients, active, title_required_with_delivery,
       group:party_groups ( id, name ),
       contacts:party_contacts ( id, name, email, phone, address, is_default, active, notes, trucking_notes ),
-      deductions:party_deductions ( id, description, kind, basis, rate ),
+      deductions:party_deductions ( id, description, kind, basis, rate, category, direction ),
       payment_terms:payment_terms ( id, name )
     `, o).eq('active', true).order('name')),
     fetchEvery((o) => supabase.from('sales_orders').select(`
@@ -79,7 +80,7 @@ export async function fetchAll() {
       title_required_with_delivery, title_notes,
       payment_terms:payment_terms ( id, name ),
       commodity:commodity_codes ( code, name ),
-      deductions:order_deductions ( id, description, kind, basis, rate ),
+      deductions:order_deductions ( id, description, kind, basis, rate, category, direction ),
       buyer:parties ( id, name, destruction_agreement_signed, title_required_with_delivery ),
       units ( count )
     `, o).order('id', { ascending: false })),
@@ -155,6 +156,7 @@ export async function fetchUnitsPage({ filters = {}, sort = {}, page = 0, pageSi
   // Needs Attention conditions (thresholds live in src/lib/attention.js)
   if (filters.purchasedBefore) q = q.lte('purchase_date', filters.purchasedBefore)
   if (filters.readyBefore) q = q.lte('ready_date', filters.readyBefore)
+  if (filters.completedBefore) q = q.lte('completion_date', filters.completedBefore)
   if (filters.importedOnly) q = q.not('import_batch', 'is', null)
   if (filters.importBatch) q = q.eq('import_batch', filters.importBatch)
   if (filters.q?.trim()) {
@@ -354,7 +356,7 @@ export async function replaceOrderDeductions(orderId, rows) {
   const { error: de } = await supabase.from('order_deductions').delete().eq('order_id', orderId)
   if (de) throw de
   const clean = rows.filter((r) => r.description?.trim() && r.rate !== '' && r.rate != null)
-    .map((r) => ({ order_id: orderId, description: r.description.trim(), kind: r.kind, basis: r.basis, rate: Number(r.rate) }))
+    .map((r) => ({ order_id: orderId, description: r.description.trim(), kind: r.kind, basis: r.basis, rate: Number(r.rate), category: r.category || null, direction: r.direction || 'deduct' }))
   if (!clean.length) return
   const { error } = await supabase.from('order_deductions').insert(clean)
   if (error) throw error
@@ -498,8 +500,9 @@ export function suggestedUnitAmount(u, deductions = []) {
   if (wt == null) return null
   for (const d of deductions) {
     if (d.kind !== 'weight') continue
-    if (d.basis === 'per_unit') wt -= Number(d.rate)
-    else if (u.tire_count != null) wt -= Number(d.rate) * u.tire_count
+    const sgn = d.direction === 'add' ? -1 : 1   // an "add" adjustment increases billable weight
+    if (d.basis === 'per_unit') wt -= sgn * Number(d.rate)
+    else if (u.tire_count != null) wt -= sgn * Number(d.rate) * u.tire_count
   }
   wt = Math.max(0, wt)
   const perLb = LB_PER[unit]
@@ -510,9 +513,10 @@ export function suggestedUnitAmount(u, deductions = []) {
 function applyDollarDeductions(amount, u, deductions, billableLbs = null) {
   for (const d of deductions) {
     if (d.kind !== 'dollars') continue
-    if (d.basis === 'per_unit') amount -= Number(d.rate)
-    else if (d.basis === 'per_lb') { if (billableLbs != null) amount -= Number(d.rate) * billableLbs }
-    else if (u.tire_count != null) amount -= Number(d.rate) * u.tire_count
+    const sgn = d.direction === 'add' ? -1 : 1
+    if (d.basis === 'per_unit') amount -= sgn * Number(d.rate)
+    else if (d.basis === 'per_lb') { if (billableLbs != null) amount -= sgn * Number(d.rate) * billableLbs }
+    else if (u.tire_count != null) amount -= sgn * Number(d.rate) * u.tire_count
   }
   return Math.max(0, amount)
 }
@@ -618,6 +622,7 @@ const CAN = {
   importSnapshot: ['office', 'sales', 'admin'],
   markInvoiceLost: ['accounting', 'admin'],
   editOrderDeductions: ['sales', 'accounting', 'admin'],
+  saveImportProfile: ['office', 'sales', 'accounting', 'admin'],
 }
 export const can = (role, action) => (CAN[action] || []).includes(role)
 
@@ -645,6 +650,17 @@ export async function fetchInvoicedTotal(from, to) {
     .eq('voided', false).gte('invoice_date', from).lte('invoice_date', to).limit(5000)
   if (error) throw error
   return { total: data.reduce((s, i) => s + Number(i.amount || 0), 0), count: data.length }
+}
+
+// Saved spreadsheet mappings, keyed by the sheet's header signature.
+export async function fetchImportProfiles() {
+  const { data, error } = await supabase.from('import_profiles').select('id, name, supplier_party_id, header_signature, mapping, defaults').limit(500)
+  if (error) throw error
+  return data
+}
+export async function saveImportProfile(profile) {
+  const { error } = await supabase.from('import_profiles').upsert(profile, { onConflict: 'header_signature' })
+  if (error) throw error
 }
 
 export const DEDUCTION_LABELS = { none: 'No Deductions', standard: 'Standard', variable: 'Variable' }

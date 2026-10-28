@@ -29,6 +29,8 @@ export const COLUMNS = {
   delivered_date: { label: 'Delivered', sort: 'completion_date' },
   pickup_date:    { label: 'Pickup date', sort: 'pickup_date' },
   note:           { label: 'Note' },
+  delivered_age:  { label: 'Days since delivered', sort: 'completion_date' },
+  docs:           { label: 'Invoice docs' },
   invoice:        { label: 'Invoice' },
 }
 
@@ -39,7 +41,7 @@ export const DEFAULT_COLUMNS = {
   'Ready — Sales Required':         ['bwt', 'unit_number', 'type', 'source', 'location', 'ready_date', 'status'],
   'Sold — Dispatch Required':       ['bwt', 'unit_number', 'type', 'location', 'sold_to', 'sales_order', 'sale_date', 'title', 'note', 'status'],
   'Dispatched — Delivery Required': ['bwt', 'unit_number', 'type', 'location', 'sold_to', 'dispatch', 'dispatch_date', 'pickup_date', 'delivery_eta', 'note', 'status'],
-  'Delivered — Invoice Required':   ['bwt', 'unit_number', 'type', 'sold_to', 'sales_order', 'delivered_date', 'invoice', 'status'],
+  'Delivered — Invoice Required':   ['bwt', 'unit_number', 'type', 'sold_to', 'sales_order', 'delivered_date', 'delivered_age', 'docs', 'status'],
   'Invoiced — Closed':              ['bwt', 'unit_number', 'type', 'sold_to', 'sales_order', 'invoice', 'delivered_date', 'status'],
   'State Unknown':                  ['bwt', 'unit_number', 'type', 'source', 'location', 'status'],
   // quick views (mixed statuses)

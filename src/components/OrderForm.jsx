@@ -50,7 +50,7 @@ export default function OrderForm({ order, orders, parties, paymentTerms = [], c
       title_required_with_delivery: editing ? p.title_required_with_delivery : !!b?.title_required_with_delivery,
     }))
     if (!editing && b?.deduction_model === 'standard') {
-      setDeds((b.deductions || []).map((d) => ({ description: d.description, kind: d.kind, basis: d.basis, rate: d.rate })))
+      setDeds((b.deductions || []).map((d) => ({ description: d.description, kind: d.kind, basis: d.basis, rate: d.rate, category: d.category || '', direction: d.direction || 'deduct' })))
     }
   }
 
@@ -143,8 +143,8 @@ export default function OrderForm({ order, orders, parties, paymentTerms = [], c
             <input value={f.title_notes} onChange={set('title_notes')} placeholder="Title notes for Kim — e.g. original title only, BOS not accepted" />
           </div>
           <div className="field full">
-            <label>Deductions on this order</label>
-            <div className="fieldnote" style={{ marginBottom: 6 }}>lbs rows come off the weight before pricing, dollar rows off the money after. Notes below are for the exceptions.</div>
+            <label>Adjustments on this order</label>
+            <div className="fieldnote" style={{ marginBottom: 6 }}>Deduct or add. lbs rows change the weight before pricing, dollar rows change the money after. Notes below are for the exceptions.</div>
             <DeductionsEditor rows={deds} onChange={setDeds} />
           </div>
           {editing && (

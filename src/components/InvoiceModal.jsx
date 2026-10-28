@@ -4,6 +4,7 @@ import Pill from './Pill'
 import { invoiceUnits, nextInvoiceNumber, suggestedUnitAmount, unitLocation } from '../lib/api'
 import { dueDate, money } from '../lib/ar'
 import { deductionLabel } from './DeductionsEditor'
+import { docsMissing, DOC_LABELS } from '../lib/attention'
 
 // One-step invoice from Inventory: the delivered units are already chosen;
 // buyer, terms, due date and a suggested amount come from them. Katherine
@@ -77,6 +78,7 @@ export default function InvoiceModal({ units, data, close, onSaved }) {
                 {(u.confirmed_net ?? u.net_wt) != null ? `${Number(u.confirmed_net ?? u.net_wt).toLocaleString()} lb` : 'no weight'}
                 {est != null && <> · <b style={{ color: 'var(--ink)' }}>{money(est)}</b></>}
               </span>
+              {docsMissing(u).length > 0 && <div className="warnrow" style={{ flexBasis: '100%', fontSize: 12 }}>Missing {docsMissing(u).map((k) => DOC_LABELS[k]).join(', ')}</div>}
             </div>
           ))}
           {suggested != null && n > 1 && (

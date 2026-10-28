@@ -74,6 +74,22 @@ left column, stop and think; the right column is expected to churn.
     (invoice terms, else buyer terms, else 30). Buckets 1–30/31–60/61–90/90+.
     **Lost is manual only** (`invoices.lost`, accounting/admin). Confirm
     thresholds and escalation with Carrie / accounting.
+  - `deliveredUninvoicedDays` (7) in `src/lib/attention.js` — Kat's clock
+    starts at delivery, not purchase. Confirm with Kat/Scott. Scott ages by
+    PURCHASE date (cash view); Kat by delivered date (working view). Both are
+    legitimate; the dashboard shows Kat's, the AR sign-off should settle the
+    management one.
+  - Invoice readiness = three documents on the unit (`doc_scale_ticket`,
+    `doc_hauler_invoice`, `doc_release`; received/missing/na). Recorded on
+    the Weights & docs modal; NOT enforced (Kat: sometimes there is no scale
+    ticket or hauler invoice). Missing ones surface in Needs Attention and
+    on the Invoice step.
+  - Adjustments (`party_deductions`/`order_deductions`) carry `direction`
+    (deduct/add) and `category` (tires, wood, fees, extra_metal, freight,
+    other) — Kat's ask: ROM files every adjustment under "freight".
+  - `import_profiles`: a sheet's normalized headers → saved column mapping
+    + defaults. Map Walmart's once; next month it loads with no clicks.
+    Needs Kat's real Walmart raw + cleaned files to prove out.
   - Bulk import (`ImportModal` + `src/lib/importSheet.js`) maps any supplier
     sheet by column name; rows land as Purchased Not Ready under one
     `import_batch`, and rows missing type/location/price/source/identifier

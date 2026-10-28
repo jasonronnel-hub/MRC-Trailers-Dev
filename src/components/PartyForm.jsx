@@ -2,10 +2,10 @@ import { useState } from 'react'
 import Modal from './Modal'
 import SearchSelect from './SearchSelect'
 import { saveParty, saveContact, saveDeduction, deleteDeduction } from '../lib/api'
+import DeductionsEditor from './DeductionsEditor'
 
 const F = (v) => v ?? ''
 const newContact = () => ({ id: null, name: '', email: '', phone: '', address: '', is_default: false, active: true, _dirty: true })
-const newDeduction = () => ({ id: null, description: '', kind: 'weight', basis: 'per_unit', rate: '', _dirty: true })
 
 export default function PartyForm({ party, groups, paymentTerms, close, onSaved }) {
   const editing = !!party
@@ -72,7 +72,8 @@ export default function PartyForm({ party, groups, paymentTerms, close, onSaved 
         for (const d of deds) {
           if (!d._dirty || d.rate === '' || !d.description.trim()) continue
           const { _dirty, id, ...fields } = d
-          await saveDeduction(id ? { ...fields, rate: Number(fields.rate) } : { ...fields, rate: Number(fields.rate), party_id: party.id }, id)
+          const clean = { ...fields, rate: Number(fields.rate), category: fields.category || null, direction: fields.direction || 'deduct' }
+          await saveDeduction(id ? clean : { ...clean, party_id: party.id }, id)
         }
       }
       onSaved(savedId ?? party?.id)
@@ -154,29 +155,17 @@ export default function PartyForm({ party, groups, paymentTerms, close, onSaved 
 
           {editing && (
             <div className="field full">
-              <label>Standard deduction schedule</label>
+              <label>Standard adjustment schedule</label>
               <div className="fieldnote" style={{ marginBottom: 6 }}>
                 Weight rows reduce billable pounds before pricing; dollar rows subtract after.
                 Applied to suggestions only when the deduction model above is <b>Standard</b>.
               </div>
-              {deds.map((d, i) => (
-                <div key={d.id ?? `new-${i}`} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-                  <input style={{ flex: 3 }} placeholder="Description (Wood floor, Tires…)" value={F(d.description)} onChange={(e) => setDed(i, 'description', e.target.value)} />
-                  <select style={{ flex: 2 }} value={d.kind} onChange={(e) => setDed(i, 'kind', e.target.value)}>
-                    <option value="weight">lbs</option>
-                    <option value="dollars">dollars</option>
-                  </select>
-                  <select style={{ flex: 2 }} value={d.basis} onChange={(e) => setDed(i, 'basis', e.target.value)}>
-                    <option value="per_unit">per unit</option>
-                    <option value="per_tire">per tire</option>
-                  </select>
-                  <input style={{ flex: 2 }} type="number" step="any" min="0" placeholder="Rate" value={F(d.rate)} onChange={(e) => setDed(i, 'rate', e.target.value)} />
-                  <button type="button" title="Remove"
-                    style={{ background: 'none', border: 0, color: 'var(--ink-soft)', fontSize: 14 }}
-                    onClick={() => removeDed(i)}>×</button>
-                </div>
-              ))}
-              <button type="button" className="btn ghost sm" onClick={() => setDeds([...deds, newDeduction()])}>+ Add deduction</button>
+              <DeductionsEditor rows={deds} onChange={(rows) => {
+                const keep = new Set(rows.map((r) => r.id).filter(Boolean))
+                const gone = deds.filter((r) => r.id && !keep.has(r.id)).map((r) => r.id)
+                if (gone.length) setRemovedDeds([...removedDeds, ...gone])
+                setDeds(rows.map((r) => ({ ...r, _dirty: true })))
+              }} />
             </div>
           )}
 

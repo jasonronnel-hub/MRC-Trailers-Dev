@@ -17,6 +17,9 @@ export default function WeightsModal({ unit, close, onSaved }) {
     confirmed_net: F(unit.confirmed_net),
     wt_um: unit.wt_um || 'LB',
     tire_count: F(unit.tire_count),
+    doc_scale_ticket: unit.doc_scale_ticket || '',
+    doc_hauler_invoice: unit.doc_hauler_invoice || '',
+    doc_release: unit.doc_release || '',
   })
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -50,6 +53,9 @@ export default function WeightsModal({ unit, close, onSaved }) {
         confirmed_net: num(f.confirmed_net),
         wt_um: f.wt_um || null,
         tire_count: f.tire_count === '' ? null : parseInt(f.tire_count, 10),
+        doc_scale_ticket: f.doc_scale_ticket || null,
+        doc_hauler_invoice: f.doc_hauler_invoice || null,
+        doc_release: f.doc_release || null,
       }, unit.id)
       onSaved()
     } catch (ex) { setErr(ex.message); setBusy(false) }
@@ -67,7 +73,7 @@ export default function WeightsModal({ unit, close, onSaved }) {
   )
 
   return (
-    <Modal title={`Weights — ${unit.unit_number || `W${unit.legacy_bwt_id ?? unit.id}`}`} close={close}>
+    <Modal title={`Weights & docs — ${unit.unit_number || `W${unit.legacy_bwt_id ?? unit.id}`}`} close={close}>
       {err && <div className="auth-err">{err}</div>}
       <form onSubmit={submit}>
         <div className="form-grid">
@@ -85,6 +91,24 @@ export default function WeightsModal({ unit, close, onSaved }) {
           </div>
         </div>
 
+        {/* Kat's three before she invoices. Not enforced: sometimes there is
+            no scale ticket (bought per piece) or no hauler invoice (buyer
+            hauled it, UP delivered on their own price) — that's "n/a". */}
+        <div className="form-grid" style={{ marginTop: 4 }}>
+          {[['doc_scale_ticket', 'Scale ticket'], ['doc_hauler_invoice', 'Hauler invoice'], ['doc_release', 'Release (signed by the fleet)']].map(([k, label]) => (
+            <div className="field" key={k}>
+              <label>{label}</label>
+              <select value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })}>
+                <option value="">— not recorded —</option>
+                <option value="received">received</option>
+                <option value="missing">missing</option>
+                <option value="na">n/a for this deal</option>
+              </select>
+            </div>
+          ))}
+        </div>
+        <div className="fieldnote" style={{ marginBottom: 10 }}>The three documents needed before invoicing. Nothing blocks on them; units still missing one show in Needs attention.</div>
+
         {ref ? (
           <div className="banner" style={delta != null && Math.abs(delta) >= 10
             ? { background: 'var(--error-tint)', borderColor: 'rgba(179,64,47,0.35)', borderLeftColor: 'var(--error)' }
@@ -101,7 +125,7 @@ export default function WeightsModal({ unit, close, onSaved }) {
 
         <div className="form-actions">
           <button type="button" className="btn ghost" onClick={close}>Cancel</button>
-          <button className="btn" disabled={busy}>{busy ? 'Saving…' : 'Save weights'}</button>
+          <button className="btn" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
         </div>
       </form>
     </Modal>

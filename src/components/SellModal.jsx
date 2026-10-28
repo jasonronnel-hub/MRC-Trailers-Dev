@@ -41,17 +41,19 @@ export function estimateAmount(price, unit, lbs, deductions = [], tireCount = nu
   let wt = lbs
   for (const d of deductions) {
     if (d.kind !== 'weight' || d.rate === '') continue
-    if (d.basis === 'per_unit') wt -= Number(d.rate)
-    else if (d.basis === 'per_tire' && tireCount != null) wt -= Number(d.rate) * tireCount
+    const sgn = d.direction === 'add' ? -1 : 1
+    if (d.basis === 'per_unit') wt -= sgn * Number(d.rate)
+    else if (d.basis === 'per_tire' && tireCount != null) wt -= sgn * Number(d.rate) * tireCount
   }
   wt = Math.max(0, wt)
   const per = LB_PER[unit]
   let amount = per ? (Number(price) * wt) / per : Number(price) * wt
   for (const d of deductions) {
     if (d.kind !== 'dollars' || d.rate === '') continue
-    if (d.basis === 'per_unit') amount -= Number(d.rate)
-    else if (d.basis === 'per_lb') amount -= Number(d.rate) * wt
-    else if (d.basis === 'per_tire' && tireCount != null) amount -= Number(d.rate) * tireCount
+    const sgn = d.direction === 'add' ? -1 : 1
+    if (d.basis === 'per_unit') amount -= sgn * Number(d.rate)
+    else if (d.basis === 'per_lb') amount -= sgn * Number(d.rate) * wt
+    else if (d.basis === 'per_tire' && tireCount != null) amount -= sgn * Number(d.rate) * tireCount
   }
   return Math.max(0, amount)
 }
@@ -115,7 +117,7 @@ export default function SellModal({ units, data, close, onSaved, refresh }) {
       title_required_with_delivery: !!buyer.title_required_with_delivery,
     }))
     setDeds(buyer.deduction_model === 'standard'
-      ? (buyer.deductions || []).map((d) => ({ description: d.description, kind: d.kind, basis: d.basis, rate: d.rate }))
+      ? (buyer.deductions || []).map((d) => ({ description: d.description, kind: d.kind, basis: d.basis, rate: d.rate, category: d.category || '', direction: d.direction || 'deduct' }))
       : [])
   }, [buyer?.id])   // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -300,8 +302,8 @@ export default function SellModal({ units, data, close, onSaved, refresh }) {
               <input value={f.title_notes} onChange={set('title_notes')} placeholder="Title notes for Kim — e.g. original title only, BOS not accepted" />
             </div>
             <div className="field full">
-              <label>Deductions on this deal</label>
-              <div className="fieldnote" style={{ marginBottom: 6 }}>Starts from the buyer’s standard schedule; edit for this deal. lbs rows come off the weight before pricing, dollar rows off the money after.</div>
+              <label>Adjustments on this deal</label>
+              <div className="fieldnote" style={{ marginBottom: 6 }}>Starts from the buyer’s standard schedule; edit for this deal. Deduct or add; lbs rows change the weight before pricing, dollar rows change the money after.</div>
               <DeductionsEditor rows={deds} onChange={setDeds} />
             </div>
             <div className="field full">

@@ -10,7 +10,7 @@ import InvoiceModal from './InvoiceModal'
 import SearchSelect from './SearchSelect'
 import { can, fetchUnitsPage, unitLocation, markUnitsReady, markUnitsDelivered } from '../lib/api'
 import { COLUMNS, loadColumns, saveColumns, resetColumns } from '../lib/columns'
-import { ATTENTION, cutoffs, attentionReasons, needsBackfill } from '../lib/attention'
+import { ATTENTION, cutoffs, attentionReasons, needsBackfill, docsMissing } from '../lib/attention'
 import { isOverdue } from '../lib/ar'
 
 const PAGE_SIZE = 50
@@ -112,19 +112,21 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
           const base = { ...filters, attention: undefined }
           const c = cutoffs()
           const pick = (extra, pageSize = 500) => fetchUnitsPage({ filters: { ...base, ...extra }, sort, page: 0, pageSize })
-          const [mia, unknown, stale, unsold, dispatched, imported] = await Promise.all([
+          const [mia, unknown, stale, unsold, dispatched, imported, delivered] = await Promise.all([
             pick({ missingOnly: true }),
             unknownId ? pick({ statusIds: [unknownId] }) : { rows: [] },
             pick({ statusIds: [sid('Purchased Not Ready')], purchasedBefore: c.notReadyBefore }),
             pick({ statusIds: [sid('Ready — Sales Required')], readyBefore: c.readyBefore }),
             pick({ statusIds: [sid('Dispatched — Delivery Required')] }, 1000),
             pick({ importedOnly: true }, 1000),
+            pick({ statusIds: [sid('Delivered — Invoice Required')] }, 1000),
           ])
           const seen = new Set()
           const rows = [
             ...mia.rows, ...unknown.rows, ...stale.rows, ...unsold.rows,
             ...dispatched.rows.filter((u) => u.dispatch?.delivery_eta && u.dispatch.delivery_eta <= c.etaBefore),
             ...imported.rows.filter((u) => needsBackfill(u).length),
+            ...delivered.rows.filter((u) => (u.completion_date && u.completion_date <= c.deliveredBefore) || docsMissing(u).length),
           ].filter((u) => !seen.has(u.id) && seen.add(u.id))
           if (!cancelled) setResult({ rows, count: rows.length })
         } else {
@@ -243,6 +245,16 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
       case 'dispatch_date': return dateCell(u.dispatch_date || u.dispatch?.scheduled_pickup)
       case 'delivery_eta': return dateCell(u.dispatch?.delivery_eta)
       case 'delivered_date': return dateCell(u.completion_date)
+      case 'delivered_age': return u.completion_date ? <span className="mono muted">{Math.floor((Date.now() - new Date(u.completion_date + 'T00:00:00')) / 86400000)}d</span> : dash
+      case 'docs': return (
+        <span style={{ fontSize: 12, whiteSpace: 'nowrap' }} title="scale ticket · hauler invoice · release">
+          {[['doc_scale_ticket', 'scale'], ['doc_hauler_invoice', 'hauler'], ['doc_release', 'release']].map(([k, l]) => (
+            <span key={k} className="tag" style={{ marginRight: 3, color: u[k] === 'missing' ? 'var(--error)' : u[k] ? 'var(--ink-soft)' : 'var(--line)', borderColor: u[k] === 'missing' ? 'var(--error)' : undefined }}>
+              {u[k] === 'received' ? '✓ ' : u[k] === 'na' ? '– ' : u[k] === 'missing' ? '✗ ' : '· '}{l}
+            </span>
+          ))}
+        </span>
+      )
       case 'pickup_date': return dateCell(u.pickup_date)
       case 'title_rec_date': return dateCell(u.title_received_date)
       case 'note': return u.replacement_for ? <span className="muted" title={u.replacement_for} style={{ display: 'inline-block', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>{u.replacement_for}</span> : dash
@@ -320,7 +332,7 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
 
       {view === 'attention' && !statusFilter && (
         <div className="banner" style={{ marginBottom: 10 }}>
-          <b>Queue rules (provisional):</b> not ready over {ATTENTION.notReadyDays} days · ready but unsold over {ATTENTION.readyUnsoldDays} days · dispatched past its delivery ETA · MIA · state unknown · imported with missing data.
+          <b>Queue rules (provisional):</b> not ready over {ATTENTION.notReadyDays} days · ready but unsold over {ATTENTION.readyUnsoldDays} days · dispatched past its delivery ETA · delivered but uninvoiced over {ATTENTION.deliveredUninvoicedDays} days · delivered with a document missing · MIA · state unknown · imported with missing data.
           {overdueInvoices > 0 && <> Also <b>{overdueInvoices} overdue invoice{overdueInvoices === 1 ? '' : 's'}</b> — see the Invoices tab.</>}
         </div>
       )}

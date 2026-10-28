@@ -5,12 +5,18 @@
 // after. Notes stay free-form for the exceptions.
 
 const F = (v) => v ?? ''
-export const newDeduction = () => ({ id: null, description: '', kind: 'weight', basis: 'per_unit', rate: '' })
+export const newDeduction = () => ({ id: null, description: '', kind: 'weight', basis: 'per_unit', rate: '', category: '', direction: 'deduct' })
+
+// Kat's vocabulary: in ROM every adjustment line files under "freight" and
+// she types what it really is. Here it's a pick.
+export const CATEGORIES = [['tires', 'Tires'], ['wood', 'Wood'], ['fees', 'Fees'], ['extra_metal', 'Extra metal'], ['freight', 'Freight'], ['other', 'Other']]
+export const categoryLabel = (c) => CATEGORIES.find(([k]) => k === c)?.[1] || ''
 
 export function deductionLabel(d) {
   const amt = d.kind === 'weight' ? `${Number(d.rate).toLocaleString()} lb` : `$${Number(d.rate).toLocaleString()}`
   const basis = d.basis === 'per_tire' ? '/tire' : d.basis === 'per_lb' ? '/lb' : '/unit'
-  return `${d.description} ${amt}${basis}`
+  const sign = d.direction === 'add' ? '+' : '−'
+  return `${d.description} ${sign}${amt}${basis}`
 }
 
 export default function DeductionsEditor({ rows, onChange, compact = false }) {
@@ -26,6 +32,14 @@ export default function DeductionsEditor({ rows, onChange, compact = false }) {
     <div>
       {rows.map((d, i) => (
         <div key={d.id ?? `new-${i}`} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+          <select style={{ flex: 1.4 }} value={d.direction || 'deduct'} onChange={(e) => set(i, 'direction', e.target.value)} title="Deduct (tires, wood, fees) or add (extra strap, extra metal)">
+            <option value="deduct">− deduct</option>
+            <option value="add">+ add</option>
+          </select>
+          <select style={{ flex: 1.6 }} value={d.category || ''} onChange={(e) => set(i, 'category', e.target.value)}>
+            <option value="">category</option>
+            {CATEGORIES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+          </select>
           <input style={{ flex: 3 }} placeholder="Description (Wood floor, Tires…)" value={F(d.description)} onChange={(e) => set(i, 'description', e.target.value)} />
           <select style={{ flex: 2 }} value={d.kind} onChange={(e) => set(i, 'kind', e.target.value)}>
             <option value="weight">lbs</option>
@@ -41,7 +55,7 @@ export default function DeductionsEditor({ rows, onChange, compact = false }) {
         </div>
       ))}
       <button type="button" className="btn ghost sm" onClick={() => onChange([...rows, newDeduction()])}>
-        {compact ? '+ Deduction' : '+ Add deduction'}
+        {compact ? '+ Adjustment' : '+ Add adjustment'}
       </button>
     </div>
   )

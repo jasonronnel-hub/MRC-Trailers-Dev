@@ -86,6 +86,9 @@ export function applyMapping(rows, mapping) {
   }).filter((u) => u.unit_number || u.vin)
 }
 
+// Normalized headers joined — the same supplier's sheet next month matches.
+export const headerSignature = (headers) => headers.map((h) => norm(h)).filter(Boolean).join('|')
+
 export const newBatchId = () => {
   const d = new Date()
   return `IMP-${d.toISOString().slice(0, 10).replaceAll('-', '')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`

@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import Modal from './Modal'
 import SearchSelect from './SearchSelect'
 import { CommoditySelect } from './SellModal'
-import { FIELDS, parseText, parseFile, findHeaderRow, autoMap, applyMapping, newBatchId } from '../lib/importSheet'
+import { FIELDS, parseText, parseFile, findHeaderRow, autoMap, applyMapping, newBatchId, headerSignature } from '../lib/importSheet'
 import { supabase } from '../lib/supabase'
+import { fetchImportProfiles, saveImportProfile } from '../lib/api'
 import { shortLocation } from '../lib/location'
 
 // Bulk purchase intake (Jason's list, Sept 2026). Three steps:
@@ -29,6 +30,13 @@ export default function ImportModal({ parties, equipTypes, commodityCodes = [], 
   const [selected, setSelected] = useState(new Set())
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  // Saved mappings: match this sheet's headers against what's been mapped
+  // before (Kat: every supplier's spreadsheet is different; map once).
+  const [profiles, setProfiles] = useState([])
+  const [matched, setMatched] = useState(null)
+  const [remember, setRemember] = useState(true)
+  const [profileName, setProfileName] = useState('')
+  useEffect(() => { fetchImportProfiles().then(setProfiles).catch(() => setProfiles([])) }, [])
 
   const headers = grid ? grid[headerIdx] || [] : []
   const codes = useMemo(() => new Set(commodityCodes.map((c) => c.code)), [commodityCodes])
@@ -78,10 +86,20 @@ export default function ImportModal({ parties, equipTypes, commodityCodes = [], 
     return () => { cancelled = true }
   }, [parsed])   // eslint-disable-line react-hooks/exhaustive-deps
 
+  const applyProfile = (p) => {
+    setMatched(p); setMapping(p.mapping || {}); setRemember(false); setProfileName(p.name)
+    if (p.supplier_party_id) setSourceId(p.supplier_party_id)
+    if (p.defaults?.equipId) setEquipId(String(p.defaults.equipId))
+    if (p.defaults?.commodity) setCommodityDefault(p.defaults.commodity)
+    if (p.defaults?.rateUnit) setRateUnit(p.defaults.rateUnit)
+  }
   const load = async (rows) => {
     if (!rows?.length) { setErr('Nothing to import.'); return }
     const h = findHeaderRow(rows)
-    setGrid(rows); setHeaderIdx(h); setMapping(autoMap(rows[h] || [])); setErr('')
+    setGrid(rows); setHeaderIdx(h); setErr('')
+    const p = profiles.find((x) => x.header_signature === headerSignature(rows[h] || []))
+    if (p) applyProfile(p)
+    else { setMatched(null); setMapping(autoMap(rows[h] || [])); setRemember(true); setProfileName('') }
   }
   const loadPaste = () => load(parseText(paste))
   const loadFile = async (file) => {
@@ -126,6 +144,13 @@ export default function ImportModal({ parties, equipTypes, commodityCodes = [], 
         const { error } = await supabase.from('units').insert(rows.slice(i, i + 500))
         if (error) throw error
       }
+      if (remember && profileName.trim()) {
+        await saveImportProfile({
+          name: profileName.trim(), supplier_party_id: sourceId || null,
+          header_signature: headerSignature(headers), mapping,
+          defaults: { equipId: equipId || null, commodity: commodityDefault || null, rateUnit },
+        }).catch(() => {})   // a failed save never blocks the import
+      }
       const backfill = [...selected].filter((i) => parsed[i].issues.length).length
       onSaved({ count: rows.length, batch, backfill })
     } catch (ex) { setErr(ex.message); setBusy(false) }
@@ -160,10 +185,15 @@ export default function ImportModal({ parties, equipTypes, commodityCodes = [], 
         </>
       ) : (
         <>
+          {matched ? (
+            <div className="banner" style={{ marginBottom: 10 }}><b>Using saved mapping: {matched.name}.</b> Same columns as last time — check the preview and import.</div>
+          ) : (
+            <div className="banner" style={{ marginBottom: 10 }}>New layout — columns were matched by name. Fix any that are wrong; it’s remembered for next time.</div>
+          )}
           <div className="form-grid" style={{ marginBottom: 10 }}>
             <div className="field">
               <label>Header row</label>
-              <select value={headerIdx} onChange={(e) => { const h = Number(e.target.value); setHeaderIdx(h); setMapping(autoMap(grid[h] || [])) }}>
+              <select value={headerIdx} onChange={(e) => { const h = Number(e.target.value); setHeaderIdx(h); const p = profiles.find((x) => x.header_signature === headerSignature(grid[h] || [])); if (p) applyProfile(p); else { setMatched(null); setMapping(autoMap(grid[h] || [])) } }}>
                 {grid.slice(0, 15).map((r, i) => <option key={i} value={i}>Row {i + 1}: {r.filter(Boolean).slice(0, 5).join(' · ').slice(0, 60)}</option>)}
               </select>
             </div>
@@ -220,6 +250,11 @@ export default function ImportModal({ parties, equipTypes, commodityCodes = [], 
               </label>
             ))}
             {!parsed.length && <div className="muted" style={{ padding: 10, fontSize: 13 }}>No rows with a unit # or VIN — check the header row and the Unit # / VIN mapping.</div>}
+          </div>
+          <div className="field" style={{ margin: '8px 0' }}>
+            <label className="checkline"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> Remember this mapping as</label>
+            <input value={profileName} onChange={(e) => setProfileName(e.target.value)} disabled={!remember}
+              placeholder={suppliers.find((x) => String(x.id) === String(sourceId))?.name ? `${suppliers.find((x) => String(x.id) === String(sourceId)).name} spreadsheet` : 'e.g. Walmart monthly list'} />
           </div>
           <p className="muted" style={{ fontSize: 12.5 }}>
             {selected.size} of {parsed.length} rows selected — imported as <b>Purchased Not Ready</b> under one batch id.
