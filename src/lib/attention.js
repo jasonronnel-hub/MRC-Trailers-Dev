@@ -10,7 +10,7 @@ export const ATTENTION = {
   dispatchPastEtaDays: 0,  // Dispatched with a delivery ETA this many days in the past
   // Kat's clock starts at delivery, not purchase ("before it ships there's
   // nothing I can do with it"). Delivered — Invoice Required older than this.
-  deliveredUninvoicedDays: 7,
+  deliveredUninvoicedDays: 30,
 }
 
 const daysAgo = (n) => {

@@ -74,8 +74,9 @@ left column, stop and think; the right column is expected to churn.
     (invoice terms, else buyer terms, else 30). Buckets 1–30/31–60/61–90/90+.
     **Lost is manual only** (`invoices.lost`, accounting/admin). Confirm
     thresholds and escalation with Carrie / accounting.
-  - `deliveredUninvoicedDays` (7) in `src/lib/attention.js` — Kat's clock
-    starts at delivery, not purchase. Confirm with Kat/Scott. Scott ages by
+  - `deliveredUninvoicedDays` (30, set by Jason Oct 28 — was 7) in
+    `src/lib/attention.js` — Kat's clock starts at delivery, not purchase.
+    Confirm with Kat/Scott. Scott ages by
     PURCHASE date (cash view); Kat by delivered date (working view). Both are
     legitimate; the dashboard shows Kat's, the AR sign-off should settle the
     management one.
@@ -122,6 +123,18 @@ and TrailerTypeInvID; ROM's free-text item lands in `detail_notes`.
 the header total is null throughout the backup. Verified against the single
 trailer invoice that records a payment amount — Katherine must confirm the
 formula before cutover.
+
+**Invoice lines** (Kat, Oct 27; Jason confirmed Oct 28: separate visible lines).
+An invoice carries `invoice_lines`: per unit one SALE line at the unit's
+pre-adjustment weight, then one line per adjustment (tires, wood, fees, extra
+metal…) with its signed dollar effect, then a "Manual adjustment to total"
+line if Kat typed a total that differs. `invoices.amount` stays the
+authoritative total; lines are written in whole cents and sum to it. Computed
+by `unitInvoiceBreakdown` (`src/lib/pricing.js`), which is tested to equal
+`suggestedUnitAmount` (`node scripts/test-invoice-lines.mjs`). Per-tire
+adjustments on a unit with no tire count are skipped, never guessed, and
+flagged in the modal. Adding units to an open invoice appends their lines and
+moves its total by the same amount. Legacy/ROM invoices have no lines.
 
 **Purchase locations are site records** (`party_contacts` with an `address`,
 under the fleet account — ROM EntContacts; FedEx Ground has 668 stations).

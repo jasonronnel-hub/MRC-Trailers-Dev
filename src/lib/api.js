@@ -474,52 +474,8 @@ export async function resolveInvoiceDispute(id) {
   if (error) throw error
 }
 
-// The three tons of the scrap trade (weights are always stored in POUNDS;
-// these convert only at pricing time). 'per_ton' is the legacy value from
-// before the distinction and meant the industry-default net ton.
-export const LB_PER = {
-  per_nt: 2000,          // net / short ton
-  per_gt: 2240,          // gross / long ton
-  per_mt: 2204.62262,    // metric tonne
-  per_ton: 2000,         // legacy alias
-}
-
-// Suggested invoice amount from a unit's SO pricing — a HELPER for Katherine,
-// never authoritative (settlement weights/deductions are her Phase 3b domain).
-//
-// Deduction math (Jason, Aug 2026): weight deductions (lbs, per tire or per
-// unit) reduce billable pounds BEFORE pricing; dollar deductions (per tire
-// or per unit) subtract AFTER. Per-tire rules need the unit's tire_count —
-// if it's missing, per-tire rules are skipped (never guessed).
-export function suggestedUnitAmount(u, deductions = []) {
-  const price = u.sales_order?.price
-  const unit = u.sales_order?.price_unit
-  if (price == null) return null
-  if (unit === 'flat') return applyDollarDeductions(Number(price), u, deductions)
-  let wt = u.confirmed_net ?? u.net_wt
-  if (wt == null) return null
-  for (const d of deductions) {
-    if (d.kind !== 'weight') continue
-    const sgn = d.direction === 'add' ? -1 : 1   // an "add" adjustment increases billable weight
-    if (d.basis === 'per_unit') wt -= sgn * Number(d.rate)
-    else if (u.tire_count != null) wt -= sgn * Number(d.rate) * u.tire_count
-  }
-  wt = Math.max(0, wt)
-  const perLb = LB_PER[unit]
-  const gross = perLb ? (Number(price) * wt) / perLb : Number(price) * wt
-  return applyDollarDeductions(gross, u, deductions, wt)
-}
-
-function applyDollarDeductions(amount, u, deductions, billableLbs = null) {
-  for (const d of deductions) {
-    if (d.kind !== 'dollars') continue
-    const sgn = d.direction === 'add' ? -1 : 1
-    if (d.basis === 'per_unit') amount -= sgn * Number(d.rate)
-    else if (d.basis === 'per_lb') { if (billableLbs != null) amount -= sgn * Number(d.rate) * billableLbs }
-    else if (u.tire_count != null) amount -= sgn * Number(d.rate) * u.tire_count
-  }
-  return Math.max(0, amount)
-}
+import { LB_PER } from './pricing'
+export { LB_PER, suggestedUnitAmount, unitInvoiceBreakdown } from './pricing'
 
 // ---- dispatch (Phase 3 strawman — workflow provisional until Kim's pass) ----
 
@@ -580,7 +536,7 @@ export async function markUnitsReady(unitIds, readyStatusId) {
 // One-step invoice (mirrors sellUnits / dispatchUnits): create the invoice —
 // or add to an open one for the same buyer — and attach an EXPLICIT list of
 // delivered units. The attach path flips them to Invoiced — Closed.
-export async function invoiceUnits({ invoice, invoiceId, unitIds }) {
+export async function invoiceUnits({ invoice, invoiceId, unitIds, lines = [] }) {
   let id = invoiceId
   let invoice_number = null
   if (!id) {
@@ -589,8 +545,67 @@ export async function invoiceUnits({ invoice, invoiceId, unitIds }) {
     id = data.id; invoice_number = data.invoice_number
   }
   await assignUnitsToInvoice(id, unitIds)
+  if (lines.length) await addInvoiceLines(id, lines, { addToAmount: !!invoiceId })
   return { id, invoice_number }
 }
+
+// Insert line items. When they are being added to an invoice that already
+// exists, its total moves by the same amount so lines and total stay in step.
+export async function addInvoiceLines(invoiceId, lines, { addToAmount = false } = {}) {
+  const { data: last } = await supabase.from('invoice_lines').select('sort').eq('invoice_id', invoiceId).order('sort', { ascending: false }).limit(1)
+  let sort = (last?.[0]?.sort ?? 0) + 1
+  const rows = lines.map((l) => ({
+    invoice_id: invoiceId, unit_id: l.unit_id ?? null, kind: l.kind,
+    category: l.category || null, direction: l.direction || null,
+    description: l.description, detail: l.detail ?? null,
+    amount: Math.round(Number(l.amount) * 100) / 100, sort: sort++,
+  }))
+  const { error } = await supabase.from('invoice_lines').insert(rows)
+  if (error) throw error
+  if (addToAmount) {
+    const { data: inv } = await supabase.from('invoices').select('amount').eq('id', invoiceId).single()
+    if (inv?.amount != null) {
+      const add = rows.reduce((t, r) => t + r.amount, 0)
+      const { error: e2 } = await supabase.from('invoices').update({ amount: Math.round((Number(inv.amount) + add) * 100) / 100 }).eq('id', invoiceId)
+      if (e2) throw e2
+    }
+  }
+}
+
+export async function fetchInvoiceLines(invoiceId) {
+  const { data, error } = await supabase.from('invoice_lines')
+    .select('id, unit_id, kind, category, direction, description, detail, amount, sort')
+    .eq('invoice_id', invoiceId).order('sort')
+  if (error) throw error
+  return data || []
+}
+
+// Flatten per-unit breakdowns (lib/pricing.js) into invoice_lines rows.
+// `manual` is whatever Kat's typed total differs from the computed lines by,
+// kept as its own visible line so the lines always add up to the total.
+const cents = (n) => Math.round(Number(n) * 100) / 100
+
+export function breakdownsToLines(rows, typedTotal = null) {
+  const lines = []
+  for (const { u, b } of rows) {
+    if (!b) continue
+    lines.push({ unit_id: u.id, kind: 'sale', description: `${u.unit_number || 'W' + (u.legacy_bwt_id ?? u.id)} · sale`, detail: b.sale.detail, amount: cents(b.sale.amount) })
+    for (const a of b.adjustments) {
+      lines.push({ unit_id: u.id, kind: 'adjustment', category: a.category, direction: a.direction, description: a.description, detail: a.detail, amount: cents(a.amount) })
+    }
+  }
+  // Lines are written in whole cents, so compare against THEIR sum, not the
+  // unrounded breakdown total — otherwise every invoice drifts by a cent.
+  const computed = cents(lines.reduce((t, l) => t + l.amount, 0))
+  if (typedTotal != null && lines.length && Math.abs(typedTotal - computed) >= 0.005) {
+    lines.push({ unit_id: null, kind: 'adjustment', category: 'other', direction: typedTotal < computed ? 'deduct' : 'add', description: 'Manual adjustment to total', detail: null, amount: cents(typedTotal - computed) })
+  }
+  return lines
+}
+
+// What the lines for these units add up to, in whole cents (the default
+// invoice amount, so an unedited total never creates a manual-adjustment line).
+export const linesTotal = (rows) => cents(breakdownsToLines(rows).reduce((t, l) => t + l.amount, 0))
 
 // Mark an EXPLICIT list of units delivered: status + completion date.
 // The audit trigger logs the status change.

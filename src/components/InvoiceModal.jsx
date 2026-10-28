@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import Modal from './Modal'
 import Pill from './Pill'
-import { invoiceUnits, nextInvoiceNumber, suggestedUnitAmount, unitLocation } from '../lib/api'
+import { invoiceUnits, nextInvoiceNumber, unitInvoiceBreakdown, breakdownsToLines, linesTotal, unitLocation } from '../lib/api'
 import { dueDate, money } from '../lib/ar'
-import { deductionLabel } from './DeductionsEditor'
+import { deductionLabel, categoryLabel } from './DeductionsEditor'
 import { docsMissing, DOC_LABELS } from '../lib/attention'
 
 // One-step invoice from Inventory: the delivered units are already chosen;
@@ -18,8 +18,8 @@ export default function InvoiceModal({ units, data, close, onSaved }) {
   const today = new Date().toISOString().slice(0, 10)
   const termsName = buyer?.payment_terms?.name || ''
 
-  const rows = units.map((u) => ({ u, est: suggestedUnitAmount(u, deductions) }))
-  const suggested = rows.every((r) => r.est != null) ? rows.reduce((s, r) => s + r.est, 0) : null
+  const rows = units.map((u) => { const b = unitInvoiceBreakdown(u, deductions); return { u, b, est: b?.total ?? null } })
+  const suggested = rows.every((r) => r.est != null) ? linesTotal(rows) : null
 
   const [f, setF] = useState({
     existing_invoice_id: '',
@@ -56,6 +56,9 @@ export default function InvoiceModal({ units, data, close, onSaved }) {
           open: true,
         },
         unitIds: units.map((u) => u.id),
+        // Adjustments ride along as their own visible lines. A hand-edited
+        // total shows up as one more line so the lines always add up.
+        lines: breakdownsToLines(rows, existing || f.amount === '' ? null : Number(f.amount)),
       })
       onSaved({ invoiceNumber: existing?.invoice_number ?? r.invoice_number, buyerName: buyer.name, count: units.length })
     } catch (ex) { setErr(ex.message); setBusy(false) }
@@ -67,7 +70,7 @@ export default function InvoiceModal({ units, data, close, onSaved }) {
       {err && <div className="auth-err">{err}</div>}
       <form onSubmit={submit}>
         <div className="est-list">
-          {rows.map(({ u, est }) => (
+          {rows.map(({ u, b, est }) => (
             <div key={u.id} className="est-row">
               <span className="ticket">W{u.legacy_bwt_id ?? u.id}</span>
               <b>{u.unit_number || '—'}</b>
@@ -78,12 +81,19 @@ export default function InvoiceModal({ units, data, close, onSaved }) {
                 {(u.confirmed_net ?? u.net_wt) != null ? `${Number(u.confirmed_net ?? u.net_wt).toLocaleString()} lb` : 'no weight'}
                 {est != null && <> · <b style={{ color: 'var(--ink)' }}>{money(est)}</b></>}
               </span>
+              {b && b.skipped.length > 0 && <div className="adj-line muted" style={{ flexBasis: '100%' }}>Not applied — no tire count: {[...new Set(b.skipped)].join(', ')}</div>}
+              {b && b.adjustments.map((a, i) => (
+                <div key={i} className="adj-line" style={{ flexBasis: '100%' }}>
+                  <span>{a.direction === 'add' ? '+' : '−'} {a.description}{a.category ? <span className="muted"> · {categoryLabel(a.category)}</span> : null}{a.detail ? <span className="muted"> · {a.detail}</span> : null}</span>
+                  <span className="mono" style={{ color: a.amount < 0 ? 'var(--error)' : 'var(--ink)' }}>{a.amount < 0 ? '−' : '+'}{money(Math.abs(a.amount))}</span>
+                </div>
+              ))}
               {docsMissing(u).length > 0 && <div className="warnrow" style={{ flexBasis: '100%', fontSize: 12 }}>Missing {docsMissing(u).map((k) => DOC_LABELS[k]).join(', ')}</div>}
             </div>
           ))}
           {suggested != null && n > 1 && (
             <div className="est-row" style={{ background: 'var(--panel)' }}>
-              <span className="muted">Suggested from units{deductions.length ? ' after standard deductions' : ''}</span>
+              <span className="muted">Sale and adjustments, as separate lines on the invoice</span>
               <span className="amt"><b>{money(suggested)}</b></span>
             </div>
           )}
@@ -115,7 +125,7 @@ export default function InvoiceModal({ units, data, close, onSaved }) {
         )}
 
         {existing ? (
-          <div className="banner">Adding {n} unit{n === 1 ? '' : 's'} to <b>{existing.invoice_number}</b>. Adjust its amount on the Invoices tab afterwards.</div>
+          <div className="banner">Adding {n} unit{n === 1 ? '' : 's'} to <b>{existing.invoice_number}</b>{suggested != null ? <>. Its lines are added and its total goes up by <b>{money(suggested)}</b>.</> : <>. These units have no price or weight yet, so no lines are added; adjust the amount on the Invoices tab.</>}</div>
         ) : (
           <div className="form-grid">
             <div className="field">
@@ -134,7 +144,7 @@ export default function InvoiceModal({ units, data, close, onSaved }) {
             <div className="field">
               <label>Amount ($)</label>
               <input type="number" step="0.01" min="0" value={f.amount} onChange={set('amount')} />
-              <div className="fieldnote">Suggested from the units’ weights and SO price — not authoritative.</div>
+              <div className="fieldnote">Computed from weights, SO price and adjustments. Edit it and the difference is kept as its own line.</div>
             </div>
             <div className="field full">
               <label>Notes</label>

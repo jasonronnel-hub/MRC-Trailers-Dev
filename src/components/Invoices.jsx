@@ -3,13 +3,15 @@ import Modal from './Modal'
 import Pill from './Pill'
 import {
   can, saveInvoice, nextInvoiceNumber, fetchInvoiceUnits,
-  assignUnitsToInvoice, markInvoicePaid, fetchUnitsPage, suggestedUnitAmount,
+  invoiceUnits, markInvoicePaid, fetchUnitsPage, suggestedUnitAmount,
+  unitInvoiceBreakdown, breakdownsToLines, fetchInvoiceLines,
   flagInvoiceDispute, resolveInvoiceDispute, markInvoiceLost, unmarkInvoiceLost,
 } from '../lib/api'
 import { isOverdue, daysPastDue, dueDate, AR_RULES } from '../lib/ar'
 import { useNotes, PopupBanners, NotesList } from './Notes'
 import SearchSelect from './SearchSelect'
 import WeightsModal from './WeightsModal'
+import { categoryLabel } from './DeductionsEditor'
 
 const money = (n) => n == null ? '—' : `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
 
@@ -150,13 +152,52 @@ export default function Invoices({ data, role, refresh }) {
   )
 }
 
+// The invoice as Kat reads it: each unit's sale line, then its adjustments as
+// their own lines (tires, wood, fees, extra metal…), then the total.
+function InvoiceLines({ lines, units, amount }) {
+  const unitName = (id) => { const u = (units || []).find((x) => x.id === id); return u ? (u.unit_number || `W${u.legacy_bwt_id ?? u.id}`) : null }
+  const sum = lines.reduce((t, l) => t + Number(l.amount), 0)
+  const off = amount != null && Math.abs(Number(amount) - sum) >= 0.005
+  return (
+    <div style={{ margin: '4px 0 14px' }}>
+      <b>Invoice lines</b>
+      <div className="tablewrap" style={{ marginTop: 8 }}>
+        <table>
+          <tbody>
+            {lines.map((l) => (
+              <tr key={l.id} style={{ cursor: 'default' }}>
+                <td style={{ paddingLeft: l.kind === 'adjustment' && l.unit_id ? 22 : undefined }} className={l.kind === 'adjustment' ? '' : ''}>
+                  {l.kind === 'adjustment' ? <span className="muted">{l.direction === 'add' ? '+' : '−'} </span> : null}
+                  {l.kind === 'adjustment' ? l.description : (l.description || unitName(l.unit_id))}
+                  {l.category ? <span className="muted"> · {categoryLabel(l.category)}</span> : null}
+                  {l.detail ? <span className="muted"> · {l.detail}</span> : null}
+                </td>
+                <td className="mono" style={{ textAlign: 'right', whiteSpace: 'nowrap', color: Number(l.amount) < 0 ? 'var(--error)' : undefined }}>
+                  {Number(l.amount) < 0 ? '−' : ''}{money(Math.abs(Number(l.amount)))}
+                </td>
+              </tr>
+            ))}
+            <tr style={{ cursor: 'default' }}>
+              <td><b>Total of lines</b></td>
+              <td className="mono" style={{ textAlign: 'right' }}><b>{money(sum)}</b></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      {off && <div className="fieldnote" style={{ color: 'var(--error)' }}>The invoice amount ({money(amount)}) differs from the lines ({money(sum)}) — the amount was edited after the lines were written.</div>}
+    </div>
+  )
+}
+
 function InvoiceDrawer({ invoice: i, writable, role, deductions = [], buyerTerms, close, onEdit, onAttach, onPay, onDispute, onResolve, onLost, onUnlost }) {
   const late = i.open && !i.lost ? daysPastDue(i, buyerTerms) : null
   const [units, setUnits] = useState(null)
   const [weightsUnit, setWeightsUnit] = useState(null)
   const notesState = useNotes('invoice', i.id)
+  const [lines, setLines] = useState(null)
   const loadUnits = () => fetchInvoiceUnits(i.id).then(setUnits).catch(() => setUnits([]))
-  useEffect(() => { loadUnits() }, [i.id])   // eslint-disable-line react-hooks/exhaustive-deps
+  const loadLines = () => fetchInvoiceLines(i.id).then(setLines).catch(() => setLines([]))
+  useEffect(() => { loadUnits(); loadLines() }, [i.id, i.amount])   // eslint-disable-line react-hooks/exhaustive-deps
 
   const suggested = (units || []).reduce((s, u) => s + (suggestedUnitAmount(u, deductions) ?? 0), 0)
 
@@ -231,6 +272,8 @@ function InvoiceDrawer({ invoice: i, writable, role, deductions = [], buyerTerms
             </>)}
           </dl>
           {i.notes && <div className="banner"><b>Notes:</b> {i.notes}</div>}
+
+          {lines?.length > 0 && <InvoiceLines lines={lines} units={units} amount={i.amount} />}
 
           <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
             <button className="btn ghost sm" disabled={!units?.length} onClick={exportCsv}>Invoice-ready CSV</button>
@@ -474,7 +517,10 @@ function AttachToInvoiceModal({ invoice, statuses, deductions = [], close, onSav
   const submit = async () => {
     setBusy(true); setErr('')
     try {
-      await assignUnitsToInvoice(invoice.id, [...selected.keys()])
+      await invoiceUnits({
+        invoiceId: invoice.id, unitIds: [...selected.keys()],
+        lines: breakdownsToLines([...selected.values()].map((u) => ({ u, b: unitInvoiceBreakdown(u, deductions) }))),
+      })
       onSaved()
     } catch (ex) { setErr(ex.message); setBusy(false) }
   }
