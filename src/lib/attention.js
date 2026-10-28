@@ -26,9 +26,14 @@ export const cutoffs = () => ({
   deliveredBefore: daysAgo(ATTENTION.deliveredUninvoicedDays),
 })
 
-// Any of Kat's three documents recorded as missing.
-export const docsMissing = (u) => ['doc_scale_ticket', 'doc_hauler_invoice', 'doc_release'].filter((k) => u[k] === 'missing')
-export const DOC_LABELS = { doc_scale_ticket: 'scale ticket', doc_hauler_invoice: 'hauler invoice', doc_release: 'release' }
+import { docsMissing, DOC_LABELS } from './docs'
+export { docsMissing, DOC_LABELS }
+
+// TJ (Oct 28): only FedEx Ground has a real "not ready" step (their
+// de-identification). Every other fleet's units are sellable the moment the
+// bill of sale is paid, so a Not Ready unit from such a supplier is a slip —
+// someone forgot to flip it (ROM's Walmart loads were inconsistent about this).
+export const noReadyStep = (u) => u.status?.name === 'Purchased Not Ready' && !!u.source && !u.source.ready_step_required
 
 const ageDays = (iso) => (iso ? Math.floor((Date.now() - new Date(iso + 'T00:00:00')) / 86400000) : null)
 
@@ -39,7 +44,8 @@ export function attentionReasons(u, c = cutoffs()) {
   const st = u.status?.name
   if (u.missing) out.push('MIA')
   if (st === 'State Unknown') out.push('state unknown')
-  if (st === 'Purchased Not Ready' && u.purchase_date && u.purchase_date <= c.notReadyBefore) out.push(`not ready ${ageDays(u.purchase_date)}d`)
+  if (noReadyStep(u)) out.push(`should be ready — ${u.source.name} has no ready step`)
+  else if (st === 'Purchased Not Ready' && u.purchase_date && u.purchase_date <= c.notReadyBefore) out.push(`not ready ${ageDays(u.purchase_date)}d`)
   if (st === 'Ready — Sales Required' && u.ready_date && u.ready_date <= c.readyBefore) out.push(`unsold ${ageDays(u.ready_date)}d`)
   if (st === 'Dispatched — Delivery Required' && u.dispatch?.delivery_eta && u.dispatch.delivery_eta <= c.etaBefore) out.push(`past ETA ${ageDays(u.dispatch.delivery_eta)}d`)
   if (st === 'Delivered — Invoice Required' && u.completion_date && u.completion_date <= c.deliveredBefore) out.push(`uninvoiced ${ageDays(u.completion_date)}d`)

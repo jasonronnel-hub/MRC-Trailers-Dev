@@ -42,6 +42,7 @@ export default function PartyForm({ party, groups, paymentTerms, close, onSaved 
     rema_member: party?.rema_member ?? false,
     merged_parent: party?.merged_parent ?? false,
     title_required_with_delivery: party?.title_required_with_delivery ?? false,
+    ready_step_required: party?.ready_step_required ?? false,
     general_notes: F(party?.general_notes),
     trucking_notes: F(party?.trucking_notes),
     purchase_hot_notes: F(party?.purchase_hot_notes),
@@ -134,6 +135,11 @@ export default function PartyForm({ party, groups, paymentTerms, close, onSaved 
             <label className="checkline"><input type="checkbox" checked={f.rema_member} onChange={set('rema_member')} /> REMA member</label>
             <label className="checkline"><input type="checkbox" checked={f.merged_parent} onChange={set('merged_parent')} /> Merged parent (central billing)</label>
             <label className="checkline"><input type="checkbox" checked={f.title_required_with_delivery} onChange={set('title_required_with_delivery')} /> Requires title with delivery</label>
+            {groups.find((g) => String(g.id) === String(f.group_id))?.name === 'Trailer Supplier' && (
+              <label className="checkline" title="FedEx Ground de-identifies units before we may collect them; their units wait in Purchased Not Ready until Kim hears they are ready. Leave off for fleets whose units are ours to sell the day the bill of sale is paid (Walmart, Hub, Milestone, UP…).">
+                <input type="checkbox" checked={f.ready_step_required} onChange={set('ready_step_required')} /> Units wait for a ready signal (FedEx Ground style)
+              </label>
+            )}
           </div>
           <div className="field full">
             <label>General notes</label>

@@ -3,7 +3,7 @@ import Modal from './Modal'
 import Pill from './Pill'
 import {
   can, saveInvoice, nextInvoiceNumber, fetchInvoiceUnits,
-  invoiceUnits, markInvoicePaid, fetchUnitsPage, suggestedUnitAmount,
+  invoiceUnits, markInvoicePaid, fetchUnitsPage, suggestedUnitAmount, saveUnit,
   unitInvoiceBreakdown, breakdownsToLines, fetchInvoiceLines,
   flagInvoiceDispute, resolveInvoiceDispute, markInvoiceLost, unmarkInvoiceLost,
 } from '../lib/api'
@@ -12,6 +12,8 @@ import { useNotes, PopupBanners, NotesList } from './Notes'
 import SearchSelect from './SearchSelect'
 import WeightsModal from './WeightsModal'
 import { categoryLabel } from './DeductionsEditor'
+import { docGate } from '../lib/docs'
+import DocGateRow from './DocGateRow'
 
 const money = (n) => n == null ? '—' : `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
 
@@ -548,16 +550,23 @@ function AttachToInvoiceModal({ invoice, statuses, deductions = [], close, onSav
         <div className="muted" style={{ fontSize: 13 }}>Loading…</div>
       ) : candidates.length ? (
         <div className="attach-list">
-          {candidates.map((u) => (
-            <label key={u.id} className="attach-row">
-              <input type="checkbox" checked={selected.has(u.id)} onChange={() => toggle(u)} />
+          {candidates.map((u) => {
+            const gate = docGate(u)
+            return (
+            <label key={u.id} className="attach-row" style={{ flexWrap: 'wrap' }} title={gate.ok ? undefined : 'Waiting on documents'}>
+              <input type="checkbox" checked={selected.has(u.id)} disabled={!gate.ok} onChange={() => toggle(u)} />
               <span className="ticket">W{u.legacy_bwt_id ?? u.id}</span>
               <b>{u.unit_number || '—'}</b>
               <span className="muted">{u.confirmed_net ?? u.net_wt ?? '—'} lb</span>
               <span className="muted" style={{ marginLeft: 'auto' }}>{money(suggestedUnitAmount(u, deductions))}</span>
               <Pill status={u.status?.name} />
+              <DocGateRow unit={u} gate={gate} compact onChange={async (fields) => {
+                await saveUnit(fields, u.id)
+                setCandidates((cs) => cs.map((c) => (c.id === u.id ? { ...c, ...fields } : c)))
+              }} />
             </label>
-          ))}
+            )
+          })}
         </div>
       ) : (
         <div className="empty" style={{ padding: 24 }}>No uninvoiced units match.</div>

@@ -10,7 +10,7 @@ import InvoiceModal from './InvoiceModal'
 import SearchSelect from './SearchSelect'
 import { can, fetchUnitsPage, unitLocation, markUnitsReady, markUnitsDelivered } from '../lib/api'
 import { COLUMNS, loadColumns, saveColumns, resetColumns } from '../lib/columns'
-import { ATTENTION, cutoffs, attentionReasons, needsBackfill, docsMissing } from '../lib/attention'
+import { ATTENTION, cutoffs, attentionReasons, needsBackfill, docsMissing, noReadyStep } from '../lib/attention'
 import { isOverdue } from '../lib/ar'
 
 const PAGE_SIZE = 50
@@ -112,10 +112,11 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
           const base = { ...filters, attention: undefined }
           const c = cutoffs()
           const pick = (extra, pageSize = 500) => fetchUnitsPage({ filters: { ...base, ...extra }, sort, page: 0, pageSize })
-          const [mia, unknown, stale, unsold, dispatched, imported, delivered] = await Promise.all([
+          const [mia, unknown, stale, shouldBeReady, unsold, dispatched, imported, delivered] = await Promise.all([
             pick({ missingOnly: true }),
             unknownId ? pick({ statusIds: [unknownId] }) : { rows: [] },
             pick({ statusIds: [sid('Purchased Not Ready')], purchasedBefore: c.notReadyBefore }),
+            pick({ statusIds: [sid('Purchased Not Ready')] }, 1000),
             pick({ statusIds: [sid('Ready — Sales Required')], readyBefore: c.readyBefore }),
             pick({ statusIds: [sid('Dispatched — Delivery Required')] }, 1000),
             pick({ importedOnly: true }, 1000),
@@ -123,7 +124,7 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
           ])
           const seen = new Set()
           const rows = [
-            ...mia.rows, ...unknown.rows, ...stale.rows, ...unsold.rows,
+            ...mia.rows, ...unknown.rows, ...stale.rows, ...shouldBeReady.rows.filter(noReadyStep), ...unsold.rows,
             ...dispatched.rows.filter((u) => u.dispatch?.delivery_eta && u.dispatch.delivery_eta <= c.etaBefore),
             ...imported.rows.filter((u) => needsBackfill(u).length),
             ...delivered.rows.filter((u) => (u.completion_date && u.completion_date <= c.deliveredBefore) || docsMissing(u).length),
@@ -332,7 +333,7 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
 
       {view === 'attention' && !statusFilter && (
         <div className="banner" style={{ marginBottom: 10 }}>
-          <b>Queue rules (provisional):</b> not ready over {ATTENTION.notReadyDays} days · ready but unsold over {ATTENTION.readyUnsoldDays} days · dispatched past its delivery ETA · delivered but uninvoiced over {ATTENTION.deliveredUninvoicedDays} days · delivered with a document missing · MIA · state unknown · imported with missing data.
+          <b>Queue rules (provisional):</b> not ready at a supplier with no ready step (TJ: only FedEx Ground has one) · not ready over {ATTENTION.notReadyDays} days · ready but unsold over {ATTENTION.readyUnsoldDays} days · dispatched past its delivery ETA · delivered but uninvoiced over {ATTENTION.deliveredUninvoicedDays} days · delivered with a document missing · MIA · state unknown · imported with missing data.
           {overdueInvoices > 0 && <> Also <b>{overdueInvoices} overdue invoice{overdueInvoices === 1 ? '' : 's'}</b> — see the Invoices tab.</>}
         </div>
       )}
@@ -427,7 +428,7 @@ export default function Inventory({ data, counts, role, refresh, statusFilter, s
           close={() => setFormUnit(null)} onSaved={saved} />
       )}
       {importing && (
-        <ImportModal parties={parties} equipTypes={equipTypes} commodityCodes={data.commodityCodes} makes={data.makes}
+        <ImportModal parties={parties} equipTypes={equipTypes} statuses={statuses} commodityCodes={data.commodityCodes} makes={data.makes}
           close={() => setImporting(false)}
           onSaved={({ count, batch, backfill }) => {
             setImporting(false)

@@ -73,6 +73,12 @@ export default function PartyDrawer({ party: p, orders, dispatches = [], role, c
               <dt>REMA member</dt><dd>{p.rema_member ? 'Yes' : 'No'}</dd>
               <dt>Title w/ delivery</dt><dd>{p.title_required_with_delivery ? <span className="warnrow">Required — title must travel with the unit</span> : 'Not required'}</dd>
             </>)}
+            {p.group?.name === 'Trailer Supplier' && (<>
+              <dt>Ready step</dt>
+              <dd>{p.ready_step_required
+                ? <>Units wait in <b>Purchased Not Ready</b> until this fleet signals they are ready (FedEx Ground de-identification; Kim is the contact).</>
+                : <>None — units are <b>Ready — Sales Required</b> the day the bill of sale is paid.</>}</dd>
+            </>)}
           </dl>
 
           {contacts.length > 0 && (

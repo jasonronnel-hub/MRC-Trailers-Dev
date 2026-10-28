@@ -72,19 +72,27 @@ left column, stop and think; the right column is expected to churn.
   - `src/lib/ar.js` — overdue = open, not disputed, not lost, past due date
     (+0 grace); due date = invoice due_date, else invoice date + terms days
     (invoice terms, else buyer terms, else 30). Buckets 1–30/31–60/61–90/90+.
-    **Lost is manual only** (`invoices.lost`, accounting/admin). Confirm
-    thresholds and escalation with Carrie / accounting.
+    **Lost is manual only** (`invoices.lost`, accounting/admin). TJ (Oct 28)
+    confirmed the model: default net 30, per-account terms chosen on the
+    account (some large buyers net 15), Carrie reads that and starts
+    collecting after the due date. Carrie's own confirmation of grace /
+    escalation still pending.
   - `deliveredUninvoicedDays` (30, set by Jason Oct 28 — was 7) in
     `src/lib/attention.js` — Kat's clock starts at delivery, not purchase.
     Confirm with Kat/Scott. Scott ages by
     PURCHASE date (cash view); Kat by delivered date (working view). Both are
     legitimate; the dashboard shows Kat's, the AR sign-off should settle the
     management one.
-  - Invoice readiness = three documents on the unit (`doc_scale_ticket`,
-    `doc_hauler_invoice`, `doc_release`; received/missing/na). Recorded on
-    the Weights & docs modal; NOT enforced (Kat: sometimes there is no scale
-    ticket or hauler invoice). Missing ones surface in Needs Attention and
-    on the Invoice step.
+  - Invoice readiness = a CONDITIONAL document gate (`src/lib/docs.js`,
+    proposed Oct 28, to validate with Kat): the release is always required;
+    a scale ticket is required for a weight-priced sale (a flat/per-piece
+    sale may record an exception); a hauler invoice is required when a hauler
+    other than the buyer was dispatched (buyer pickup / fleet self-delivery
+    may record an exception). An exception is `doc_* = 'na'` WITH a reason
+    (`doc_*_reason`, enforced by CHECK). Enforced in the invoice step and the
+    attach-to-invoice step, where each document is resolved inline; the DB
+    does not block (legacy ROM units carry no document states). Only units
+    explicitly recorded as *missing* a document show in Needs attention.
   - Adjustments (`party_deductions`/`order_deductions`) carry `direction`
     (deduct/add) and `category` (tires, wood, fees, extra_metal, freight,
     other) — Kat's ask: ROM files every adjustment under "freight".
@@ -117,6 +125,18 @@ the trailer division, seeded verbatim; `sales_orders.item_code` and
 and TrailerTypeInvID; ROM's free-text item lands in `detail_notes`.
 `units.purchase_date` = BrokerWTHDR.CreatedDate; `sold_date` = the order's date
 (in-app: set by the attach trigger).
+
+**Ready step is per supplier** (TJ, Oct 28). "Purchased Not Ready" exists for
+FedEx Ground's de-identification process; every other fleet's units are ours to
+sell the moment the bill of sale is paid. `parties.ready_step_required`
+(default false; true for FedEx Ground / Home Delivery / SmartPost) drives:
+the importer and New-unit default status (Ready — Sales Required with
+`ready_date` = purchase date when the supplier has no ready step), the ROM
+transform + `restatus.mjs` (same rule, voided units untouched), and a Needs
+attention reason for any Not Ready unit at a no-ready-step supplier. FedEx
+Ground units are flipped by Kim when their managers reply to the Tuesday
+inventory report. There is no MIA status in ROM: a missing FXG unit is just
+Not Ready (our `units.missing` flag is extra).
 
 **Invoice amounts** are computed at extract time from ROM's settlement lines
 (per-each price, or settle weight in the line's unit x settle price) because

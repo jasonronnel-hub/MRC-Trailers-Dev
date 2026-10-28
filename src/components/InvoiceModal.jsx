@@ -1,16 +1,27 @@
 import { useMemo, useState } from 'react'
 import Modal from './Modal'
 import Pill from './Pill'
-import { invoiceUnits, nextInvoiceNumber, unitInvoiceBreakdown, breakdownsToLines, linesTotal, unitLocation } from '../lib/api'
+import { invoiceUnits, nextInvoiceNumber, unitInvoiceBreakdown, breakdownsToLines, linesTotal, unitLocation, saveUnit } from '../lib/api'
 import { dueDate, money } from '../lib/ar'
 import { deductionLabel, categoryLabel } from './DeductionsEditor'
-import { docsMissing, DOC_LABELS } from '../lib/attention'
+import { docGate } from '../lib/docs'
+import DocGateRow from './DocGateRow'
 
 // One-step invoice from Inventory: the delivered units are already chosen;
 // buyer, terms, due date and a suggested amount come from them. Katherine
 // still owns the number — the suggestion is a starting point, editable.
-export default function InvoiceModal({ units, data, close, onSaved }) {
+export default function InvoiceModal({ units: unitsIn, data, close, onSaved }) {
   const { parties, invoices } = data
+  // Document states edited right here (received / exception) overlay the
+  // snapshot the grid handed us, so the gate re-evaluates without a reload.
+  const [docEdits, setDocEdits] = useState({})
+  const units = unitsIn.map((u) => (docEdits[u.id] ? { ...u, ...docEdits[u.id] } : u))
+  const setDocs = async (u, fields) => {
+    await saveUnit(fields, u.id)
+    setDocEdits((d) => ({ ...d, [u.id]: { ...(d[u.id] || {}), ...fields } }))
+  }
+  const gates = units.map((u) => ({ u, gate: docGate(u) }))
+  const blocked = gates.filter((g) => !g.gate.ok).length
   const buyers = parties.filter((p) => p.group?.name === 'Trailer Buyer')
   const buyerIds = [...new Set(units.map((u) => u.sold_to?.id).filter(Boolean))]
   const buyer = buyerIds.length === 1 ? buyers.find((b) => b.id === buyerIds[0]) : null
@@ -41,6 +52,7 @@ export default function InvoiceModal({ units, data, close, onSaved }) {
   const submit = async (e) => {
     e.preventDefault()
     if (!buyer) { setErr('These units are sold to different buyers — invoice one buyer at a time.'); return }
+    if (blocked) { setErr(`${blocked} unit${blocked === 1 ? ' is' : 's are'} still waiting on documents — resolve them above first.`); return }
     setBusy(true); setErr('')
     try {
       const r = await invoiceUnits({
@@ -88,12 +100,12 @@ export default function InvoiceModal({ units, data, close, onSaved }) {
                   <span className="mono" style={{ color: a.amount < 0 ? 'var(--error)' : 'var(--ink)' }}>{a.amount < 0 ? '−' : '+'}{money(Math.abs(a.amount))}</span>
                 </div>
               ))}
-              {docsMissing(u).length > 0 && <div className="warnrow" style={{ flexBasis: '100%', fontSize: 12 }}>Missing {docsMissing(u).map((k) => DOC_LABELS[k]).join(', ')}</div>}
+              <DocGateRow unit={u} gate={docGate(u)} onChange={(fields) => setDocs(u, fields)} />
             </div>
           ))}
           {suggested != null && n > 1 && (
             <div className="est-row" style={{ background: 'var(--panel)' }}>
-              <span className="muted">Sale and adjustments, as separate lines on the invoice</span>
+              <span className="muted">Sale and adjustments, as separate lines on the invoice{blocked ? ` · ${blocked} unit${blocked === 1 ? '' : 's'} waiting on documents` : ''}</span>
               <span className="amt"><b>{money(suggested)}</b></span>
             </div>
           )}
@@ -155,7 +167,7 @@ export default function InvoiceModal({ units, data, close, onSaved }) {
 
         <div className="form-actions">
           <button type="button" className="btn ghost" onClick={close}>Cancel</button>
-          <button className="btn" disabled={busy || !buyer}>
+          <button className="btn" disabled={busy || !buyer || blocked > 0} title={blocked ? 'Resolve the documents above first' : undefined}>
             {busy ? 'Saving…' : existing ? `Add ${n} to ${existing.invoice_number}` : `Invoice ${n} unit${n === 1 ? '' : 's'}`}
           </button>
         </div>

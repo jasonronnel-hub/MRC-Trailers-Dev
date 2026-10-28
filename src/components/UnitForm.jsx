@@ -38,6 +38,7 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
     purchase_rate: F(unit?.purchase_rate),
     purchase_rate_unit: unit?.purchase_rate_unit ?? 'per_lb',
     purchase_date: F(unit?.purchase_date) || (unit ? '' : new Date().toISOString().slice(0, 10)),
+    ready_date: F(unit?.ready_date),
     purchase_order_ref: F(unit?.purchase_order_ref),
     commodity_code: F(unit?.commodity_code),
     ref_weight_lbs: F(unit?.ref_weight_lbs),
@@ -92,6 +93,7 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
         purchase_rate: f.purchase_rate === '' ? null : Number(f.purchase_rate),
         purchase_rate_unit: f.purchase_rate === '' ? null : f.purchase_rate_unit,
         purchase_date: f.purchase_date || null,
+        ready_date: f.ready_date || null,
         purchase_order_ref: f.purchase_order_ref || null,
         commodity_code: f.commodity_code || null,
         ref_weight_lbs: f.ref_weight_lbs === '' ? null : parseInt(f.ref_weight_lbs, 10),
@@ -145,7 +147,22 @@ export default function UnitForm({ unit, statuses, equipTypes, titleTypes, parti
             <SearchSelect placeholder="Type to find the fleet…" style={{ width: '100%' }}
               options={suppliers.map((s) => ({ id: s.id, label: s.name }))}
               value={f.source_party_id}
-              onChange={(v) => setF({ ...f, source_party_id: v, purchase_contact_id: '' })} />
+              onChange={(v) => {
+                // New unit: the default status follows the supplier. TJ (Oct 28):
+                // only FedEx Ground has a ready step; everyone else's units are
+                // sellable the day they're bought.
+                const next = { ...f, source_party_id: v, purchase_contact_id: '' }
+                if (!unit) {
+                  const src = parties.find((p) => String(p.id) === String(v))
+                  const want = src && !src.ready_step_required ? 'Ready — Sales Required' : 'Purchased Not Ready'
+                  const cur = statuses.find((s) => String(s.id) === String(f.status_id))?.name
+                  if (!cur || cur === 'Purchased Not Ready' || cur === 'Ready — Sales Required') {
+                    next.status_id = statuses.find((s) => s.name === want)?.id ?? f.status_id
+                    if (want === 'Ready — Sales Required' && !next.ready_date) next.ready_date = next.purchase_date || new Date().toISOString().slice(0, 10)
+                  }
+                }
+                setF(next)
+              }} />
           </div>
           <div className="field">
             <label>Purchase location (site under the fleet)</label>

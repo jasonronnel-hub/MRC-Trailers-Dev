@@ -17,7 +17,7 @@ import { sheetDate } from '../lib/importSheet'
 //      Purchased Not Ready tagged with one batch id. Rows still missing
 //      data show up in Needs attention as "needs backfill".
 // Review the real supplier files with Catherine before cutover.
-export default function ImportModal({ parties, equipTypes, commodityCodes = [], makes = [], close, onSaved }) {
+export default function ImportModal({ parties, equipTypes, statuses = [], commodityCodes = [], makes = [], close, onSaved }) {
   const suppliers = parties.filter((p) => p.group?.name === 'Trailer Supplier')
   const [paste, setPaste] = useState('')
   const [fileName, setFileName] = useState('')
@@ -47,6 +47,9 @@ export default function ImportModal({ parties, equipTypes, commodityCodes = [], 
   // to it and the pickup address comes from there.
   const sourceSites = (parties.find((p) => String(p.id) === String(sourceId))?.contacts || []).filter((c) => c.active !== false)
   const siteCode = (name) => (name.match(/-\s*(\d{3,5})\s*$/) || [])[1]
+  const sourceParty = parties.find((p) => String(p.id) === String(sourceId)) || null
+  const readyOnPurchase = !!sourceParty && !sourceParty.ready_step_required
+  const readyStatusId = statuses.find((s) => s.name === 'Ready — Sales Required')?.id
   const resolveSite = (loc, addr) => {
     const l = String(loc || '').trim(); if (!l) return null
     let hits = /^\d{3,5}$/.test(l) ? sourceSites.filter((c) => siteCode(c.name) === l) : sourceSites.filter((c) => c.name.toLowerCase().includes(l.toLowerCase()))
@@ -174,7 +177,9 @@ export default function ImportModal({ parties, equipTypes, commodityCodes = [], 
         equipment_type_id: type?.id ?? null,
         ref_weight_lbs: type?.default_ref_weight_lbs ?? null,
         import_batch: batch,
-        // status defaults to Purchased Not Ready; purchase_date defaults to today
+        // TJ (Oct 28): only a supplier with a ready step (FedEx Ground) parks
+        // units in Purchased Not Ready. Everyone else's are sellable on purchase.
+        ...(readyOnPurchase && readyStatusId ? { status_id: readyStatusId, ready_date: purchaseDate || new Date().toISOString().slice(0, 10) } : {}),
       }
     })
     try {
@@ -299,7 +304,7 @@ export default function ImportModal({ parties, equipTypes, commodityCodes = [], 
             {parsed.filter((r) => r.site).length} of {parsed.length} rows resolved to a site under {suppliers.find((x) => String(x.id) === String(sourceId))?.name || 'the fleet'} · {parsed.filter((r) => r.decoded.lengthFt).length} sized from the VIN{sheetDate(grid, headerIdx) ? ` · purchase date ${sheetDate(grid, headerIdx)} from the sheet` : ''}.
           </p>
           <p className="muted" style={{ fontSize: 12.5 }}>
-            {selected.size} of {parsed.length} rows selected — imported as <b>Purchased Not Ready</b> under one batch id.
+            {selected.size} of {parsed.length} rows selected — imported as <b>{readyOnPurchase ? 'Ready — Sales Required' : 'Purchased Not Ready'}</b> under one batch id{readyOnPurchase ? <span className="muted"> ({sourceParty.name} has no ready step — sellable on purchase)</span> : sourceParty ? <span className="muted"> ({sourceParty.name} signals when units are ready)</span> : null}.
             {issueCount > 0 && <> <b>{issueCount}</b> still missing data; they import anyway and appear in <b>Needs attention</b> until filled in.</>}
           </p>
           <div className="form-actions">

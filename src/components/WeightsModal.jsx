@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Modal from './Modal'
 import { saveUnit } from '../lib/api'
+import { docRequirements } from '../lib/docs'
 
 const F = (v) => (v == null ? '' : String(v))
 const num = (v) => (v === '' ? null : Number(v))
@@ -20,6 +21,8 @@ export default function WeightsModal({ unit, close, onSaved }) {
     doc_scale_ticket: unit.doc_scale_ticket || '',
     doc_hauler_invoice: unit.doc_hauler_invoice || '',
     doc_release: unit.doc_release || '',
+    doc_scale_ticket_reason: unit.doc_scale_ticket_reason || '',
+    doc_hauler_invoice_reason: unit.doc_hauler_invoice_reason || '',
   })
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -40,6 +43,7 @@ export default function WeightsModal({ unit, close, onSaved }) {
   }
 
   const ref = unit.ref_weight_lbs
+  const req = docRequirements(unit)
   const cn = num(f.confirmed_net) ?? num(f.net_wt)
   const delta = ref && cn != null ? ((cn - ref) / ref) * 100 : null
 
@@ -56,6 +60,8 @@ export default function WeightsModal({ unit, close, onSaved }) {
         doc_scale_ticket: f.doc_scale_ticket || null,
         doc_hauler_invoice: f.doc_hauler_invoice || null,
         doc_release: f.doc_release || null,
+        doc_scale_ticket_reason: f.doc_scale_ticket === 'na' ? (f.doc_scale_ticket_reason.trim() || req.doc_scale_ticket.exception || 'exception recorded') : null,
+        doc_hauler_invoice_reason: f.doc_hauler_invoice === 'na' ? (f.doc_hauler_invoice_reason.trim() || req.doc_hauler_invoice.exception || 'exception recorded') : null,
       }, unit.id)
       onSaved()
     } catch (ex) { setErr(ex.message); setBusy(false) }
@@ -91,9 +97,9 @@ export default function WeightsModal({ unit, close, onSaved }) {
           </div>
         </div>
 
-        {/* Kat's three before she invoices. Not enforced: sometimes there is
-            no scale ticket (bought per piece) or no hauler invoice (buyer
-            hauled it, UP delivered on their own price) — that's "n/a". */}
+        {/* Kat's three before she invoices. Conditional gate (lib/docs.js):
+            the release is always required; a scale ticket or hauler invoice
+            can be excepted when the deal doesn't need one — with a reason. */}
         <div className="form-grid" style={{ marginTop: 4 }}>
           {[['doc_scale_ticket', 'Scale ticket'], ['doc_hauler_invoice', 'Hauler invoice'], ['doc_release', 'Release (signed by the fleet)']].map(([k, label]) => (
             <div className="field" key={k}>
@@ -102,12 +108,16 @@ export default function WeightsModal({ unit, close, onSaved }) {
                 <option value="">— not recorded —</option>
                 <option value="received">received</option>
                 <option value="missing">missing</option>
-                <option value="na">n/a for this deal</option>
+                {(req[k].exception || f[k] === 'na') && <option value="na">exception — not needed for this deal</option>}
               </select>
+              <div className="fieldnote">{req[k].required ? `Required: ${req[k].why}.` : `Not required: ${req[k].why}.`}</div>
+              {f[k] === 'na' && req[k].exception && (
+                <input style={{ marginTop: 4 }} value={f[`${k}_reason`]} onChange={(e) => setF({ ...f, [`${k}_reason`]: e.target.value })} placeholder={req[k].exception} />
+              )}
             </div>
           ))}
         </div>
-        <div className="fieldnote" style={{ marginBottom: 10 }}>The three documents needed before invoicing. Nothing blocks on them; units still missing one show in Needs attention.</div>
+        <div className="fieldnote" style={{ marginBottom: 10 }}>Invoicing waits for each document to be received or, where the deal doesn't need one, an exception with a reason. Units recorded as missing one show in Needs attention.</div>
 
         {ref ? (
           <div className="banner" style={delta != null && Math.abs(delta) >= 10

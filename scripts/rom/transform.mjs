@@ -144,6 +144,9 @@ if (unmappedTerms) console.log(`  (${unmappedTerms} dealers had a payment_terms 
 
 const partyIds = await fetchAllRows('parties', 'id, legacy_dealer_id', (q) => q.not('legacy_dealer_id', 'is', null))
 const party = new Map(partyIds.map((p) => [p.legacy_dealer_id, p.id]))
+// TJ (Oct 28): only suppliers flagged ready_step_required (FedEx Ground) park
+// units in Purchased Not Ready; everyone else's are Ready the day they're bought.
+const readyStepParties = new Set((await fetchAllRows('parties', 'id', (q) => q.eq('ready_step_required', true))).map((p) => p.id))
 
 // ---------- 2. party_banking (only dealers with any wire/federal data) ----------
 const WIRE_KEYS = [
@@ -277,6 +280,8 @@ const stUnits = await fetchAllRows('staging_units', '*')
 let soidFallbacks = 0
 const unitRows = stUnits.map((u) => {
   const readyState = int(u.ready_state)   // 0/1 flag, not a pipeline code
+  const sourcePartyId = party.get(int(u.purch_dealer_id)) ?? null
+  const readyOnPurchase = sourcePartyId != null && !readyStepParties.has(sourcePartyId)
   // SaleOrderID=0 means unsold; some completed units carry the sale in BrokerWTDTL.SOID (Field Mapping §9.3)
   let legacySo = int(u.sale_order_id) || null
   if (!legacySo && int(u.dtl_soid)) { legacySo = int(u.dtl_soid); soidFallbacks++ }
@@ -295,13 +300,13 @@ const unitRows = stUnits.map((u) => {
     status_id: statusIdByName(deriveStatus({
       invoiced: !!int(u.sale_invoice_id), pickup_date: u.pickup_date, completion_date: u.completion_date,
       dispatch_date: u.dispatch_date, sold_to: !!int(u.sale_dealer_id), sales_order: !!legacySo,
-      ready: readyState === 1,
+      ready: readyState === 1 || readyOnPurchase,
     })),
-    source_party_id: party.get(int(u.purch_dealer_id)) ?? null,
+    source_party_id: sourcePartyId,
     purchase_order_ref: u.purch_cust_ref || null,
     condition_comments: u.ticket_notes || null,
     replacement_for: u.replacement_for?.trim() || null,
-    ready_date: dateOnly(u.ready_date), scheduled_date: dateOnly(u.sched_date),
+    ready_date: dateOnly(u.ready_date) ?? (readyOnPurchase && readyState !== 1 ? dateOnly(u.created_date) : null), scheduled_date: dateOnly(u.sched_date),
     dispatch_date: dateOnly(u.dispatch_date), pickup_date: dateOnly(u.pickup_date),
     completion_date: dateOnly(u.completion_date),
     missing: u.mia === '1',
